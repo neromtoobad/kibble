@@ -29,6 +29,11 @@ export type Judgement = {
   model: string;
 };
 
+// Generous, because the failure this prevents looks exactly like a model that cannot produce
+// JSON: a reasoning model spends tokens before it answers, gets cut off mid-object, and the
+// parse fails on what was actually a perfectly good answer.
+const MAX_TOKENS = 2000;
+
 type Provider = { kind: 'anthropic' | 'openai'; key: string; model: string; url: string };
 
 function provider(): Provider | null {
@@ -145,7 +150,7 @@ type Mode = 'schema' | 'object' | 'plain';
 function openaiBody(p: Provider, system: string, user: string, mode: Mode) {
   const base: Record<string, unknown> = {
     model: p.model,
-    max_tokens: 700,
+    max_tokens: MAX_TOKENS,
     messages: [
       { role: 'system', content: mode === 'plain' ? `${system}\n\nReply with ONLY a JSON object matching: {"action": "open|add|trim|flatten|hold", "size_usd": number, "fraction": number, "rationale": string, "cited": string[], "confidence": number}. No prose, no markdown fence.` : system },
       { role: 'user', content: user },
@@ -172,7 +177,7 @@ async function callOnce(p: Provider, system: string, user: string, mode: Mode): 
     body: JSON.stringify(
       p.kind === 'anthropic'
         ? {
-            model: p.model, max_tokens: 700, system,
+            model: p.model, max_tokens: MAX_TOKENS, system,
             messages: [{ role: 'user', content: user }],
             // A tool with the schema is the portable way to force well-formed JSON.
             tools: [{ name: 'decide', description: 'Commit to a decision.', input_schema: SCHEMA }],
@@ -191,8 +196,12 @@ async function callOnce(p: Provider, system: string, user: string, mode: Mode): 
     return input ? { ok: true, data: input } : { ok: false, status: 200, body: 'no tool_use block in the answer' };
   }
 
-  const choice = (j.choices as Array<{ message?: { content?: string } }> | undefined)?.[0];
-  const text = choice?.message?.content ?? '';
+  const choice = (j.choices as Array<{ message?: { content?: string; reasoning?: string }; finish_reason?: string }> | undefined)?.[0];
+  // Some models answer in `reasoning` and leave `content` empty.
+  const text = choice?.message?.content?.trim() || choice?.message?.reasoning?.trim() || '';
+  if (choice?.finish_reason === 'length') {
+    return { ok: false, status: 200, body: `answer cut off at ${MAX_TOKENS} tokens — raise MAX_TOKENS or pick a less verbose model` };
+  }
   const parsed = text ? extractJson(text) : null;
   return parsed ? { ok: true, data: parsed } : { ok: false, status: 200, body: `unparseable answer: ${text.slice(0, 200)}` };
 }
@@ -214,6 +223,35 @@ async function call(p: Provider, system: string, user: string): Promise<Record<s
     if (last) return null;
   }
   return null;
+}
+
+/**
+ * Tie the model's citations back to real events.
+ *
+ * An exact string match was too strict to be useful: models paraphrase ("the 2026-08-26 8-K item
+ * 2.02") rather than quoting a title verbatim, so every citation was being thrown away and the
+ * diary lost the one thing that makes a decision checkable. Matching is now containment either
+ * way after normalising, which accepts a paraphrase that genuinely names the item and still
+ * rejects one referring to something it was never shown.
+ */
+function matchCitations(claimed: string[], events: SensedEvent[]): string[] {
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const out = new Set<string>();
+  for (const c of claimed) {
+    const n = norm(c);
+    if (n.length < 6) continue;
+    for (const e of events) {
+      const t = norm(e.title);
+      if (t.includes(n) || n.includes(t)) { out.add(e.title); break; }
+      // A paraphrase shares most of the distinctive words of the thing it names.
+      const words = new Set(t.split(' ').filter((w) => w.length > 3));
+      if (words.size) {
+        const hit = [...words].filter((w) => n.includes(w)).length / words.size;
+        if (hit >= 0.6) { out.add(e.title); break; }
+      }
+    }
+  }
+  return [...out];
 }
 
 /**
@@ -243,13 +281,13 @@ export async function judge(opts: {
   const intent = toIntent(raw, opts.pet);
   if (!intent) return null;
 
-  const titles = new Set(opts.events.map((e) => e.title));
   return {
     ts: opts.now ?? Date.now(),
     intent,
     rationale: intent.reason,
-    // Keep only citations that match something actually put in front of it.
-    cited: (Array.isArray(raw.cited) ? raw.cited : []).map(String).filter((c) => titles.has(c)),
+    // Keep only citations that point at something actually put in front of it, and store the
+    // real title rather than the model's wording of it.
+    cited: matchCitations(Array.isArray(raw.cited) ? raw.cited.map(String) : [], opts.events),
     confidence: Math.min(1, Math.max(0, Number(raw.confidence) || 0)),
     model: p.model,
   };

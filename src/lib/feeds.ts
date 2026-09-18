@@ -44,6 +44,19 @@ async function get(url: string, ua: string, revalidate: number): Promise<Respons
 
 // ── headlines ─────────────────────────────────────────────────────────
 
+/** RSS carries HTML entities, so the model was being shown "S&amp;P 500" and similar. */
+function decodeEntities(t: string): string {
+  return t
+    .replace(/&(?:amp|#38);/g, '&')
+    .replace(/&(?:lt|#60);/g, '<')
+    .replace(/&(?:gt|#62);/g, '>')
+    .replace(/&(?:quot|#34);/g, '"')
+    .replace(/&(?:apos|#39|#x27);/g, "'")
+    .replace(/&(?:nbsp|#160);/g, ' ')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
 function parseRss(xml: string, feed: 'yahoo' | 'google'): SensedEvent[] {
   const out: SensedEvent[] = [];
   for (const it of xml.split(/<item[\s>]/).slice(1)) {
@@ -58,9 +71,9 @@ function parseRss(xml: string, feed: 'yahoo' | 'google'): SensedEvent[] {
     out.push({
       kind: 'headline',
       // Google News appends " - Source" to every title.
-      title: feed === 'google' ? title.replace(/\s-\s[^-]+$/, '') : title,
+      title: decodeEntities(feed === 'google' ? title.replace(/\s-\s[^-]+$/, '') : title),
       at: d && !Number.isNaN(d.getTime()) ? d.toISOString() : null,
-      source: pick('source') ?? (feed === 'google' ? title.split(' - ').pop() ?? null : 'Yahoo Finance'),
+      source: decodeEntities(pick('source') ?? (feed === 'google' ? title.split(' - ').pop() ?? '' : 'Yahoo Finance')) || null,
       url: pick('link'),
     });
   }
