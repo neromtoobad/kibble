@@ -6,3 +6,6 @@ out
 *.log
 .DS_Store
 next-env.d.ts
+
+# posting plan, not part of the submission
+POST.md

@@ -32,26 +32,57 @@ export type Judgement = {
 // Generous, because the failure this prevents looks exactly like a model that cannot produce
 // JSON: a reasoning model spends tokens before it answers, gets cut off mid-object, and the
 // parse fails on what was actually a perfectly good answer.
-const MAX_TOKENS = 2000;
+const MAX_TOKENS = 3000;
 
-type Provider = { kind: 'anthropic' | 'openai'; key: string; model: string; url: string };
+type Provider = { kind: 'anthropic' | 'openai'; key: string; models: string[]; url: string };
+
+/**
+ * Free models churn. Two slugs that worked on Thursday were "unavailable for free" by Saturday,
+ * and several others answer 429 depending on the hour. Pinning one name means the pet silently
+ * stops thinking the moment its model is demoted, and the paper log grows a hole nobody notices
+ * until a judge reads it.
+ *
+ * So NIGHT_SHIFT_MODEL takes a comma-separated chain and the first model that actually answers
+ * wins. These five were verified live against OpenRouter's free tier: a capable one first, a
+ * finance-tuned one behind it, then progressively cheaper fallbacks. Whichever answered is
+ * recorded on the judgement, so the diary always says which model made the call.
+ */
+const FREE_CHAIN = [
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'inclusionai/ling-3.0-flash-fin:free',
+  'nex-agi/nex-n2.5-pro:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'nex-agi/nex-n2.5-mini:free',
+];
+
+const chain = (raw: string | undefined, fallback: string[]) => {
+  const picked = (raw ?? '').split(',').map((m) => m.trim()).filter(Boolean);
+  return picked.length ? picked : fallback;
+};
 
 function provider(): Provider | null {
   const a = process.env.ANTHROPIC_API_KEY;
-  if (a) return { kind: 'anthropic', key: a, model: process.env.NIGHT_SHIFT_MODEL ?? 'claude-opus-5', url: 'https://api.anthropic.com/v1/messages' };
+  if (a) return { kind: 'anthropic', key: a, models: chain(process.env.NIGHT_SHIFT_MODEL, ['claude-opus-5']), url: 'https://api.anthropic.com/v1/messages' };
   // Anything OpenAI-compatible: OpenAI itself, OpenRouter
   // (https://openrouter.ai/api/v1), or Bitget's Qwen endpoint
   // (https://hackathon.bitgetops.com/v1) if those credits come through.
   const o = process.env.OPENAI_API_KEY;
   if (o) {
     const base = process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
-    return { kind: 'openai', key: o, model: process.env.NIGHT_SHIFT_MODEL ?? 'gpt-4o-mini', url: `${base.replace(/\/$/, '')}/chat/completions` };
+    const openRouter = base.includes('openrouter.ai');
+    return {
+      kind: 'openai',
+      key: o,
+      models: chain(process.env.NIGHT_SHIFT_MODEL, openRouter ? FREE_CHAIN : ['gpt-4o-mini']),
+      url: `${base.replace(/\/$/, '')}/chat/completions`,
+    };
   }
   return null;
 }
 
 export const hasModel = () => provider() !== null;
-export const modelName = () => provider()?.model ?? null;
+export const modelName = () => provider()?.models[0] ?? null;
+export const modelChain = () => provider()?.models ?? [];
 
 // What the model is allowed to return. Kept narrow on purpose: these are the only five
 // things a Stockling can do, and `size_usd` is a request, not a grant.
@@ -87,13 +118,23 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
     `You are ${pet.name}, a ${sp.species} that trades the ${sp.ticker} perpetual on Bitget. You are the decision-maker, not an assistant: you decide, and your owner reads about it afterwards.`,
     `Voice: ${VOICE[pet.personality]}`,
     '',
+    // Without this the model reasons its way to a short, returns "open", and the engine opens a
+    // LONG — the diary then reads "bearish, so I bought", which is nonsense nobody can audit.
+    'YOU CAN ONLY BE LONG OR FLAT. You cannot short, and there is no action that opens a short.',
+    '  open    = start a long        (only when you hold nothing)',
+    '  add     = make the long bigger',
+    '  trim    = make the long smaller',
+    '  flatten = close the long completely',
+    '  hold    = do nothing',
+    'If your read is bearish, the answer is trim, flatten or hold — never open or add.',
+    '',
     'Your mandate — these are hard limits enforced after you answer, so asking for more is wasted:',
     `  leverage ceiling ${m.maxLever}×`,
     `  trim if liquidation is nearer than ${m.minLiqDistPct}%`,
     `  never hold a carry above ${m.maxFundingApr}% a year`,
     `  keep ${(m.reserve * 100).toFixed(0)}% of margin undeployed`,
     '',
-    'Decide from the events. If nothing in them justifies a change, hold — holding is a real answer and a forced trade is worse than none. Cite the specific events you used; do not cite one you did not read. Never invent a number that is not in front of you.',
+    'Decide from the events. If nothing in them justifies a change, hold — holding is a real answer and a forced trade is worse than none. Cite the specific events you used, copying the title as it was given to you; do not cite one you did not read. Never invent a number that is not in front of you.',
   ].join('\n');
 
   const user = [
@@ -147,9 +188,9 @@ function extractJson(text: string): Record<string, unknown> | null {
 /** Ask for JSON three ways, cheapest guarantee first, because support varies wildly. */
 type Mode = 'schema' | 'object' | 'plain';
 
-function openaiBody(p: Provider, system: string, user: string, mode: Mode) {
+function openaiBody(p: Provider, model: string, system: string, user: string, mode: Mode) {
   const base: Record<string, unknown> = {
-    model: p.model,
+    model,
     max_tokens: MAX_TOKENS,
     messages: [
       { role: 'system', content: mode === 'plain' ? `${system}\n\nReply with ONLY a JSON object matching: {"action": "open|add|trim|flatten|hold", "size_usd": number, "fraction": number, "rationale": string, "cited": string[], "confidence": number}. No prose, no markdown fence.` : system },
@@ -161,10 +202,10 @@ function openaiBody(p: Provider, system: string, user: string, mode: Mode) {
   return base;
 }
 
-async function callOnce(p: Provider, system: string, user: string, mode: Mode): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; status: number; body: string }> {
+async function callOnce(p: Provider, model: string, system: string, user: string, mode: Mode): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; status: number; body: string }> {
   const res = await fetch(p.url, {
     method: 'POST',
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(40_000),
     headers: p.kind === 'anthropic'
       ? { 'Content-Type': 'application/json', 'x-api-key': p.key, 'anthropic-version': '2023-06-01' }
       : {
@@ -177,13 +218,13 @@ async function callOnce(p: Provider, system: string, user: string, mode: Mode): 
     body: JSON.stringify(
       p.kind === 'anthropic'
         ? {
-            model: p.model, max_tokens: MAX_TOKENS, system,
+            model, max_tokens: MAX_TOKENS, system,
             messages: [{ role: 'user', content: user }],
             // A tool with the schema is the portable way to force well-formed JSON.
             tools: [{ name: 'decide', description: 'Commit to a decision.', input_schema: SCHEMA }],
             tool_choice: { type: 'tool', name: 'decide' },
           }
-        : openaiBody(p, system, user, mode),
+        : openaiBody(p, model, system, user, mode),
     ),
   });
 
@@ -207,21 +248,30 @@ async function callOnce(p: Provider, system: string, user: string, mode: Mode): 
 }
 
 /**
- * Try structured output, then JSON mode, then plain instructions. Anthropic gets one shot
- * because its tool call is already a guarantee. This ladder is what lets a free OpenRouter
- * model — which usually rejects `json_schema` outright — still drive the pet.
+ * Walk the chain: for each model, try structured output, then JSON mode, then plain instructions.
+ * A model that is gone, throttled or unintelligible costs one step and the next one is tried;
+ * only a bad key stops the whole thing, because no amount of retrying fixes that.
+ *
+ * Anthropic gets one mode per model, because its forced tool call is already a guarantee.
  */
-async function call(p: Provider, system: string, user: string): Promise<Record<string, unknown> | null> {
+async function call(p: Provider, system: string, user: string): Promise<{ data: Record<string, unknown>; model: string } | null> {
   const modes: Mode[] = p.kind === 'anthropic' ? ['schema'] : ['schema', 'object', 'plain'];
-  for (const mode of modes) {
-    const r = await callOnce(p, system, user, mode).catch((e) => ({ ok: false as const, status: 0, body: (e as Error).message }));
-    if (r.ok) return r.data;
-    const last = mode === modes[modes.length - 1];
-    console.error(`brain: ${p.model} [${mode}] ${r.status || 'error'} — ${r.body}`);
-    // 401/402/429 will not improve by asking differently.
-    if (r.status === 401 || r.status === 402 || r.status === 429) return null;
-    if (last) return null;
+
+  for (const model of p.models) {
+    for (const mode of modes) {
+      const r = await callOnce(p, model, system, user, mode).catch((e) => ({ ok: false as const, status: 0, body: (e as Error).message }));
+      if (r.ok) {
+        if (model !== p.models[0]) console.warn(`brain: fell back to ${model}`);
+        return { data: r.data, model };
+      }
+      console.error(`brain: ${model} [${mode}] ${r.status || 'error'} — ${r.body}`);
+      // A bad or unfunded key fails identically on every model; stop rather than hammer.
+      if (r.status === 401 || r.status === 402) return null;
+      // Gone or throttled: no other mode will help, move to the next model.
+      if (r.status === 404 || r.status === 403 || r.status === 429) break;
+    }
   }
+  console.error(`brain: no model in the chain answered (${p.models.length} tried)`);
   return null;
 }
 
@@ -272,11 +322,12 @@ export async function judge(opts: {
   if (!opts.events.length) return null;
 
   const { system, user } = prompt(opts.pet, opts.price, opts.fundingRate, opts.events);
-  const raw = await call(p, system, user).catch((e) => {
+  const answered = await call(p, system, user).catch((e) => {
     console.error(`brain: ${(e as Error).message}`);
     return null;
   });
-  if (!raw) return null;
+  if (!answered) return null;
+  const { data: raw, model } = answered;
 
   const intent = toIntent(raw, opts.pet);
   if (!intent) return null;
@@ -289,6 +340,6 @@ export async function judge(opts: {
     // real title rather than the model's wording of it.
     cited: matchCitations(Array.isArray(raw.cited) ? raw.cited.map(String) : [], opts.events),
     confidence: Math.min(1, Math.max(0, Number(raw.confidence) || 0)),
-    model: p.model,
+    model,
   };
 }
