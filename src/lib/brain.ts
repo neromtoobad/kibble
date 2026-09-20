@@ -42,7 +42,7 @@ type Provider = { kind: 'anthropic' | 'openai'; key: string; models: string[]; u
  * stops thinking the moment its model is demoted, and the paper log grows a hole nobody notices
  * until a judge reads it.
  *
- * So NIGHT_SHIFT_MODEL takes a comma-separated chain and the first model that actually answers
+ * So KIBBLE_MODEL takes a comma-separated chain and the first model that actually answers
  * wins. These five were verified live against OpenRouter's free tier: a capable one first, a
  * finance-tuned one behind it, then progressively cheaper fallbacks. Whichever answered is
  * recorded on the judgement, so the diary always says which model made the call.
@@ -62,7 +62,7 @@ const chain = (raw: string | undefined, fallback: string[]) => {
 
 function provider(): Provider | null {
   const a = process.env.ANTHROPIC_API_KEY;
-  if (a) return { kind: 'anthropic', key: a, models: chain(process.env.NIGHT_SHIFT_MODEL, ['claude-opus-5']), url: 'https://api.anthropic.com/v1/messages' };
+  if (a) return { kind: 'anthropic', key: a, models: chain(process.env.KIBBLE_MODEL, ['claude-opus-5']), url: 'https://api.anthropic.com/v1/messages' };
   // Anything OpenAI-compatible: OpenAI itself, OpenRouter
   // (https://openrouter.ai/api/v1), or Bitget's Qwen endpoint
   // (https://hackathon.bitgetops.com/v1) if those credits come through.
@@ -73,7 +73,7 @@ function provider(): Provider | null {
     return {
       kind: 'openai',
       key: o,
-      models: chain(process.env.NIGHT_SHIFT_MODEL, openRouter ? FREE_CHAIN : ['gpt-4o-mini']),
+      models: chain(process.env.KIBBLE_MODEL, openRouter ? FREE_CHAIN : ['gpt-4o-mini']),
       url: `${base.replace(/\/$/, '')}/chat/completions`,
     };
   }
@@ -212,8 +212,8 @@ async function callOnce(p: Provider, model: string, system: string, user: string
           'Content-Type': 'application/json',
           Authorization: `Bearer ${p.key}`,
           // OpenRouter attributes traffic with these; harmless everywhere else.
-          'HTTP-Referer': 'https://github.com/neromtoobad/night-shift',
-          'X-Title': 'Night Shift',
+          'HTTP-Referer': 'https://github.com/neromtoobad/kibble',
+          'X-Title': 'Kibble',
         },
     body: JSON.stringify(
       p.kind === 'anthropic'

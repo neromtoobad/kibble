@@ -1,6 +1,6 @@
-# Night Shift
+# Kibble
 
-**Adopt a Stockling that works the hours your shares can't.**
+**The food is margin. Funding eats it. Feed it, and it works the hours your shares can't.**
 
 A Stockling is a collectible creature *and* an autonomous agent. You pick an egg, it hatches, you name it and choose its personality — which is also its **risk mandate**. Then you feed it. Feeding posts margin on that stock's **rToken perpetual on Bitget**. From then on it reads the news and the filings itself, a model decides what to do about them, the mandate decides what it is *allowed* to do about them, and it writes a diary explaining both.
 
@@ -22,7 +22,7 @@ The creature system — the six species, the moods, the diary, the NYSE day/nigh
 
 On Solana a Stockling bought a spot token and lent it for yield. On Bitget the same stock is a **perpetual future**, and that single difference rewrote the care loop into something the metaphor was only ever gesturing at:
 
-| | Solana edition | Night Shift |
+| | Solana edition | Kibble |
 |---|---|---|
 | Instrument | spot token, held | isolated long on an rToken perpetual |
 | What feeding does | buys shares | posts margin — it holds **more** than you fed it |
@@ -37,7 +37,7 @@ Everything below this line is new.
 
 ## How it decides
 
-Track 2 asks for the model to be the decision-maker rather than an assistant. Night Shift splits that into two layers that cannot overrule each other in the wrong direction:
+Track 2 asks for the model to be the decision-maker rather than an assistant. Kibble splits that into two layers that cannot overrule each other in the wrong direction:
 
 ```
   sense          judge             gate              execute
@@ -58,7 +58,7 @@ Track 2 asks for the model to be the decision-maker rather than an assistant. Ni
 
 ## Funding is what it eats
 
-A perpetual charges you to hold it. Every eight hours the position settles against the funding rate: a positive rate means the long pays, a negative one means it collects. Bitget publishes that number, and Night Shift spends it out of the pet's margin.
+A perpetual charges you to hold it. Every eight hours the position settles against the funding rate: a positive rate means the long pays, a negative one means it collects. Bitget publishes that number, and Kibble spends it out of the pet's margin.
 
 So the bowl empties on a schedule the exchange sets, and **hunger drains with it** — a Stockling carrying an expensive position gets hungry faster than one that isn't. The care loop stopped being decoration and became the actual cash flow of the instrument.
 
@@ -74,7 +74,7 @@ Three consecutive lines from Boomer's diary, unedited. The rate moved from 5% to
 
 ## It can faint
 
-An isolated long that runs out of margin is liquidated. Night Shift checks that against **each bar's low, not its close** — a wick that touches your liquidation price liquidates you, and pretending otherwise would flatter every pet in the app.
+An isolated long that runs out of margin is liquidated. Kibble checks that against **each bar's low, not its close** — a wick that touches your liquidation price liquidates you, and pretending otherwise would flatter every pet in the app.
 
 A fainted Stockling loses its position and its margin, sulks, and comes back the moment you feed it. That's the stake spot never had: the creature can actually be hurt by the thing it does.
 

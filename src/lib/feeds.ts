@@ -11,9 +11,9 @@ import { SPECIES, type Species } from './pets';
 // filings come back empty and only the news search answers — which is itself honest: there is
 // less to know about a company that does not have to tell you anything.
 
-const UA = 'Mozilla/5.0 (compatible; night-shift/1.0)';
+const UA = 'Mozilla/5.0 (compatible; kibble/1.0)';
 // EDGAR throttles anonymous agents and asks for a contact.
-const SEC_UA = 'night-shift hackathon agent (dimejikeji5@gmail.com)';
+const SEC_UA = 'kibble hackathon agent (dimejikeji5@gmail.com)';
 const TIMEOUT = 10_000;
 
 export type SensedEvent = {

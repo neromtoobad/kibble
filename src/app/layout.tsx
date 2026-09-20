@@ -9,7 +9,7 @@ const body = Nunito({ subsets: ['latin'], weight: ['500', '600', '700'], variabl
 const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500'], variable: '--font-mono' });
 
 export const metadata: Metadata = {
-  title: 'Night Shift',
+  title: 'Kibble',
   description: 'Adopt a Stockling that works the hours your shares cannot — an agent holding a tokenized-stock perpetual on Bitget, paying its own funding, and able to faint.',
 };
 export const viewport: Viewport = { themeColor: '#C8FF3D', viewportFit: 'cover' };

@@ -18,7 +18,7 @@ async function main() {
     console.error('  OPENAI_API_KEY=sk-...                         # OpenAI');
     console.error('  OPENAI_API_KEY=sk-or-v1-...                   # OpenRouter, plus:');
     console.error('  OPENAI_BASE_URL=https://openrouter.ai/api/v1');
-    console.error('  NIGHT_SHIFT_MODEL=<model slug>\n');
+    console.error('  KIBBLE_MODEL=<model slug>\n');
     process.exit(1);
   }
 

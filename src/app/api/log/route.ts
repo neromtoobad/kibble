@@ -99,7 +99,7 @@ export async function GET(req: Request) {
       return new Response(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': 'attachment; filename="night-shift-paper-log.csv"',
+          'Content-Disposition': 'attachment; filename="kibble-paper-log.csv"',
         },
       });
     }
