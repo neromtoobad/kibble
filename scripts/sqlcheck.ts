@@ -67,15 +67,32 @@ for (const file of files) {
     for (const a of m[2].matchAll(/(\w+)\s*=/g)) check(file, m[1], a[1], `update ${m[1]}`);
   }
 
-  // select a, b from <table>   — plain column lists only; anything with an
-  // expression, star or join is left to the database.
-  for (const m of src.matchAll(/select ([\s\S]*?)\s+from (\w+)/gi)) {
-    const [, list, table] = m;
-    if (/[*()]| join |\bas\b/i.test(list) || !tables.has(table)) continue;
+  // select a, b from <table> [alias] [join <table> [alias] ...]
+  //
+  // Aliases have to be resolved rather than skipped: the paper-log export joins pet_entries to
+  // pets and selects p.marks, which is correct and which an alias-blind check calls a bug. A
+  // checker that cries wolf on correct SQL gets switched off, so it earns its keep by
+  // understanding the join. Anything with an expression or a star is still left to the database.
+  for (const m of src.matchAll(/select ([\s\S]*?)\s+from\s+(\w+)(?:\s+(?!where|order|group|limit|join|on|left|inner|right)(\w+))?((?:\s+(?:left |inner |right )?join\s+\w+(?:\s+\w+)?\s+on[\s\S]*?)*?)(?=\s+where|\s+order|\s+group|\s+limit|\s*`|$)/gi)) {
+    const [, list, primary, primaryAlias, joins] = m;
+    if (/[*()]|\bas\b/i.test(list) || !tables.has(primary)) continue;
+
+    // alias → table, for the primary and every joined table
+    const alias = new Map<string, string>([[primary, primary]]);
+    if (primaryAlias) alias.set(primaryAlias, primary);
+    for (const j of (joins ?? '').matchAll(/join\s+(\w+)(?:\s+(\w+))?\s+on/gi)) {
+      alias.set(j[1], j[1]);
+      if (j[2]) alias.set(j[2], j[1]);
+    }
+
     seen.select++;
-    for (const col of list.split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean)) {
-      if (/^\d+$/.test(col)) continue; // select 1 from … — an existence probe
-      check(file, table, col, `select from ${table}`);
+    for (const raw of list.split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean)) {
+      if (/^\d+$/.test(raw)) continue; // select 1 from … — an existence probe
+      const dot = raw.indexOf('.');
+      if (dot < 0) { check(file, primary, raw, `select from ${primary}`); continue; }
+      const table = alias.get(raw.slice(0, dot));
+      if (!table) { problems.push(`${file}: "${raw}" uses an alias that is not in the FROM clause`); continue; }
+      check(file, table, raw.slice(dot + 1), `select from ${table}`);
     }
   }
 }
