@@ -80,6 +80,19 @@ function parseRss(xml: string, feed: 'yahoo' | 'google'): SensedEvent[] {
   return out;
 }
 
+/**
+ * A headline counts only if it is actually about this company. Yahoo's per-ticker feed and a
+ * Google search for "<company> stock" both return plenty that merely mention a sector or an
+ * index — on the first live run the agent was handed "Should You Buy Vanguard's Index Fund" and
+ * "This Berkshire Hathaway Holding Actually Makes Sense" as NVDA events. Feeding a model noise
+ * and calling it event-driven is the thing this exists not to do.
+ */
+function isAbout(title: string, ticker: string, company: string): boolean {
+  const t = title.toLowerCase();
+  const names = [company.toLowerCase(), ticker.toLowerCase(), `$${ticker.toLowerCase()}`];
+  return names.some((n) => new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(t));
+}
+
 async function headlines(ticker: string, company: string): Promise<SensedEvent[]> {
   const [y, g] = await Promise.all([
     get(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(ticker)}&region=US&lang=en-US`, UA, 600),
@@ -91,6 +104,7 @@ async function headlines(ticker: string, company: string): Promise<SensedEvent[]
   ];
   const seen = new Set<string>();
   return all.filter((h) => {
+    if (!isAbout(h.title, ticker, company)) return false;
     const k = h.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').slice(0, 60);
     if (seen.has(k)) return false;
     seen.add(k);
