@@ -33,8 +33,15 @@ export type Judgement = {
 // JSON: a reasoning model spends tokens before it answers, gets cut off mid-object, and the
 // parse fails on what was actually a perfectly good answer.
 const MAX_TOKENS = 3000;
+const CUT_OFF = `answer cut off at ${MAX_TOKENS} tokens`;
 
-type Provider = { kind: 'anthropic' | 'openai'; key: string; models: string[]; url: string };
+// One attempt may take this long; one judgement, however far down the chain it walks, may take
+// the second. The worker judges five pets every fifteen minutes, so an unbounded walk through a
+// chain of slow free models could overrun the next tick.
+const ATTEMPT_MS = 40_000;
+const BUDGET_MS = 120_000;
+
+type Provider = { kind: 'anthropic' | 'openai'; key: string; models: string[]; url: string; openRouter: boolean };
 
 /**
  * Free models churn. Two slugs that worked on Thursday were "unavailable for free" by Saturday,
@@ -62,7 +69,7 @@ const chain = (raw: string | undefined, fallback: string[]) => {
 
 function provider(): Provider | null {
   const a = process.env.ANTHROPIC_API_KEY;
-  if (a) return { kind: 'anthropic', key: a, models: chain(process.env.KIBBLE_MODEL, ['claude-opus-5']), url: 'https://api.anthropic.com/v1/messages' };
+  if (a) return { kind: 'anthropic', key: a, models: chain(process.env.KIBBLE_MODEL, ['claude-opus-5']), url: 'https://api.anthropic.com/v1/messages', openRouter: false };
   // Anything OpenAI-compatible: OpenAI itself, OpenRouter
   // (https://openrouter.ai/api/v1), or Bitget's Qwen endpoint
   // (https://hackathon.bitgetops.com/v1) if those credits come through.
@@ -75,6 +82,7 @@ function provider(): Provider | null {
       key: o,
       models: chain(process.env.KIBBLE_MODEL, openRouter ? FREE_CHAIN : ['gpt-4o-mini']),
       url: `${base.replace(/\/$/, '')}/chat/completions`,
+      openRouter,
     };
   }
   return null;
@@ -221,13 +229,17 @@ function openaiBody(p: Provider, model: string, system: string, user: string, mo
   };
   if (mode === 'schema') base.response_format = { type: 'json_schema', json_schema: { name: 'decide', schema: SCHEMA, strict: true } };
   if (mode === 'object') base.response_format = { type: 'json_object' };
+  // Every free model in the chain is a reasoning model, and at the provider's default effort they
+  // think long enough to time out at 40s or run out of tokens before the JSON. The decision is
+  // five options and a sentence; low effort is plenty. OpenRouter only — plain OpenAI rejects it.
+  if (p.openRouter) base.reasoning = { effort: 'low' };
   return base;
 }
 
-async function callOnce(p: Provider, model: string, system: string, user: string, mode: Mode): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; status: number; body: string }> {
+async function callOnce(p: Provider, model: string, system: string, user: string, mode: Mode, timeoutMs: number): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; status: number; body: string }> {
   const res = await fetch(p.url, {
     method: 'POST',
-    signal: AbortSignal.timeout(40_000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: p.kind === 'anthropic'
       ? { 'Content-Type': 'application/json', 'x-api-key': p.key, 'anthropic-version': '2023-06-01' }
       : {
@@ -263,7 +275,7 @@ async function callOnce(p: Provider, model: string, system: string, user: string
   // Some models answer in `reasoning` and leave `content` empty.
   const text = choice?.message?.content?.trim() || choice?.message?.reasoning?.trim() || '';
   if (choice?.finish_reason === 'length') {
-    return { ok: false, status: 200, body: `answer cut off at ${MAX_TOKENS} tokens — raise MAX_TOKENS or pick a less verbose model` };
+    return { ok: false, status: 200, body: CUT_OFF };
   }
   const parsed = text ? extractJson(text) : null;
   return parsed ? { ok: true, data: parsed } : { ok: false, status: 200, body: `unparseable answer: ${text.slice(0, 200)}` };
@@ -271,17 +283,28 @@ async function callOnce(p: Provider, model: string, system: string, user: string
 
 /**
  * Walk the chain: for each model, try structured output, then JSON mode, then plain instructions.
- * A model that is gone, throttled or unintelligible costs one step and the next one is tried;
- * only a bad key stops the whole thing, because no amount of retrying fixes that.
+ *
+ * Only a failure about the request's FORMAT is worth another mode on the same model — an
+ * unsupported response_format, or prose where JSON was asked for. A model that is slow, gone,
+ * throttled or too verbose is the problem itself, and asking it again a different way just spends
+ * another forty seconds and another request from the free tier's daily allowance on it. That is
+ * what the worker was doing: three timeouts on one model before trying the next.
  *
  * Anthropic gets one mode per model, because its forced tool call is already a guarantee.
  */
 async function call(p: Provider, system: string, user: string): Promise<{ data: Record<string, unknown>; model: string } | null> {
   const modes: Mode[] = p.kind === 'anthropic' ? ['schema'] : ['schema', 'object', 'plain'];
+  const deadline = Date.now() + BUDGET_MS;
 
   for (const model of p.models) {
     for (const mode of modes) {
-      const r = await callOnce(p, model, system, user, mode).catch((e) => ({ ok: false as const, status: 0, body: (e as Error).message }));
+      const left = deadline - Date.now();
+      if (left < 5_000) {
+        console.error(`brain: out of time after ${BUDGET_MS / 1000}s — falling back to the fixed rules`);
+        return null;
+      }
+      const r = await callOnce(p, model, system, user, mode, Math.min(ATTEMPT_MS, left))
+        .catch((e) => ({ ok: false as const, status: 0, body: (e as Error).message }));
       if (r.ok) {
         if (model !== p.models[0]) console.warn(`brain: fell back to ${model}`);
         return { data: r.data, model };
@@ -289,8 +312,11 @@ async function call(p: Provider, system: string, user: string): Promise<{ data: 
       console.error(`brain: ${model} [${mode}] ${r.status || 'error'} — ${r.body}`);
       // A bad or unfunded key fails identically on every model; stop rather than hammer.
       if (r.status === 401 || r.status === 402) return null;
-      // Gone or throttled: no other mode will help, move to the next model.
-      if (r.status === 404 || r.status === 403 || r.status === 429) break;
+      // OpenRouter's free allowance is per account, not per model, so every other model would
+      // answer the same 429 until tomorrow.
+      if (r.status === 429 && /per-day/i.test(r.body)) return null;
+      // Slow, gone, throttled or too verbose: the model is the problem. Next model.
+      if (r.status === 0 || r.status === 404 || r.status === 403 || r.status === 429 || r.body === CUT_OFF) break;
     }
   }
   console.error(`brain: no model in the chain answered (${p.models.length} tried)`);
