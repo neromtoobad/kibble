@@ -297,7 +297,11 @@ async function call(p: Provider, system: string, user: string): Promise<{ data: 
   const deadline = Date.now() + BUDGET_MS;
 
   for (const model of p.models) {
+    let unstructured = false;
     for (const mode of modes) {
+      // A provider that refused structured outputs refuses JSON mode the same way — that is the
+      // same feature to it — so only the plain request is worth sending.
+      if (unstructured && mode !== 'plain') continue;
       const left = deadline - Date.now();
       if (left < 5_000) {
         console.error(`brain: out of time after ${BUDGET_MS / 1000}s — falling back to the fixed rules`);
@@ -317,6 +321,7 @@ async function call(p: Provider, system: string, user: string): Promise<{ data: 
       if (r.status === 429 && /per-day/i.test(r.body)) return null;
       // Slow, gone, throttled or too verbose: the model is the problem. Next model.
       if (r.status === 0 || r.status === 404 || r.status === 403 || r.status === 429 || r.body === CUT_OFF) break;
+      if (r.status === 400 && /structured.?outputs|response_format|json_schema/i.test(r.body)) unstructured = true;
     }
   }
   console.error(`brain: no model in the chain answered (${p.models.length} tried)`);
