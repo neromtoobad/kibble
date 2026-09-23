@@ -1,7 +1,7 @@
 import type { SensedEvent } from './feeds';
-import { MANDATES, fundingApr, type Intent } from './strategy';
+import { MANDATES, MIN_TICKET, fundingApr, type Intent } from './strategy';
 import { SPECIES } from './pets';
-import type { Personality, PetState } from './pet-math';
+import { leverage, liquidationDistance, type Personality, type PetState } from './pet-math';
 
 // The pet's judgement. This is the half of the agent that is a model rather than a rule:
 // it reads what happened, decides what to do about it, and says why in its own words.
@@ -114,6 +114,20 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
   const qty = pet.position?.qty ?? 0;
   const apr = fundingApr(fundingRate);
 
+  // The numbers the gate itself uses. Given only contracts, entry and margin, a model works out
+  // that $180 of exposure sits on $50 of margin, decides it is over its reserve, and trims a
+  // position that was exactly at its limit — which is what Nova did, twice, at 95% confidence.
+  const ceiling = Math.min(m.maxLever, sp.maxLever);
+  const deployed = qty * (pet.position?.entry ?? 0) / Math.max(ceiling, 1);
+  const room = Math.max(0, pet.margin * (1 - m.reserve) - deployed);
+  const lev = leverage(pet, price);
+  const liqDist = liquidationDistance(pet, price);
+  const breached = [
+    liqDist !== null && liqDist < m.minLiqDistPct && `liquidation is ${liqDist.toFixed(1)}% away, inside your ${m.minLiqDistPct}% buffer`,
+    apr > m.maxFundingApr && `funding is ${apr.toFixed(0)}% a year, over your ${m.maxFundingApr}% ceiling`,
+    lev > m.maxLever * 1.25 && `leverage has drifted to ${lev.toFixed(1)}×`,
+  ].filter(Boolean);
+
   const system = [
     `You are ${pet.name}, a ${sp.species} that trades the ${sp.ticker} perpetual on Bitget. You are the decision-maker, not an assistant: you decide, and your owner reads about it afterwards.`,
     `Voice: ${VOICE[pet.personality]}`,
@@ -128,11 +142,13 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
     '  hold    = do nothing',
     'If your read is bearish, the answer is trim, flatten or hold — never open or add.',
     '',
-    'Your mandate — these are hard limits enforced after you answer, so asking for more is wasted:',
-    `  leverage ceiling ${m.maxLever}×`,
-    `  trim if liquidation is nearer than ${m.minLiqDistPct}%`,
-    `  never hold a carry above ${m.maxFundingApr}% a year`,
-    `  keep ${(m.reserve * 100).toFixed(0)}% of margin undeployed`,
+    'Your mandate. These limits are enforced for you, automatically, whatever you answer. You never need to trade to satisfy one, and asking past one is wasted:',
+    `  leverage ceiling ${ceiling}×`,
+    `  liquidation buffer ${m.minLiqDistPct}% — closer than that and the position is trimmed for you`,
+    `  funding ceiling ${m.maxFundingApr}% a year — above it the position is closed for you, and no buy is allowed`,
+    m.reserve > 0
+      ? `  reserve ${(m.reserve * 100).toFixed(0)}% of margin — this only caps how much open or add can put in. It is never a reason to trim or flatten.`
+      : '  no reserve — all of your margin may be deployed',
     '',
     'Decide from the events. If nothing in them justifies a change, hold — holding is a real answer and a forced trade is worse than none. Cite the specific events you used, copying the title as it was given to you; do not cite one you did not read. Never invent a number that is not in front of you.',
   ].join('\n');
@@ -140,8 +156,14 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
   const user = [
     `Right now: ${sp.ticker} at $${price.toFixed(2)}. Funding ${apr.toFixed(0)}% a year${apr > m.maxFundingApr ? ' — ABOVE your limit' : ''}.`,
     qty > 0
-      ? `You hold ${qty.toFixed(4)} contracts from $${(pet.position?.entry ?? 0).toFixed(2)}, with $${pet.margin.toFixed(2)} margin behind them.`
-      : `You hold nothing. You have $${pet.margin.toFixed(2)} of margin to work with.`,
+      ? [
+          `You hold ${qty.toFixed(4)} contracts from $${(pet.position?.entry ?? 0).toFixed(2)}: $${(qty * price).toFixed(2)} of exposure at ${lev.toFixed(1)}× (ceiling ${ceiling}×)${liqDist !== null ? `, liquidation ${liqDist.toFixed(1)}% below the price` : ''}.`,
+          `Margin $${pet.margin.toFixed(2)}, of which $${deployed.toFixed(2)} backs the position. Room to add: ${room >= MIN_TICKET ? `$${room.toFixed(2)}` : 'none — an add would be refused'}.`,
+        ].join('\n')
+      : `You hold nothing. You have $${pet.margin.toFixed(2)} of margin, and up to $${room.toFixed(2)} of it may go into a position.`,
+    breached.length
+      ? `Limit breached, and being enforced for you this hour: ${breached.join('; ')}.`
+      : 'Every limit in your mandate is satisfied right now.',
     pet.faints > 0 ? `You have fainted ${pet.faints} time(s) before. It was unpleasant.` : '',
     '',
     events.length ? 'What has happened since you last looked:' : 'Nothing new has happened since you last looked.',
