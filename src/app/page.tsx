@@ -30,7 +30,6 @@ export default function Home() {
   const q = useSearch();
   const [price, setPrice] = useState<Price>({ price: null, pct24h: 0, source: 'none' });
   const [bars, setBars] = useState<Bar[]>([]);
-  const [holidays, setHolidays] = useState<Set<string>>();
   const [report, setReport] = useState<{ fresh: Entry[]; awayMs: number } | null>(null);
   const [duel, setDuel] = useState<Duel | null>(null);
   const remoteId = useLocal('stocklings.remoteId');
@@ -45,11 +44,6 @@ export default function Home() {
     const t = setTimeout(() => { window.history.replaceState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }, 1400);
     return () => clearTimeout(t);
   }, [celebrate]);
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/holidays').then((r) => r.json()).then((j: { dates: string[] }) => { if (alive) setHolidays(new Set(j.dates)); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
 
   // Price, history, and the catch-up tick all hang off one load.
   useEffect(() => {
@@ -106,9 +100,8 @@ export default function Home() {
     return () => { alive = false; };
   }, [remoteId]);
 
-  const session = q.get('night') ? 'overnight' : nyseSession(now ? new Date(now) : new Date(), holidays);
+  const session = q.get('night') ? 'overnight' : nyseSession(now ? new Date(now) : new Date());
   const night = isNight(session);
-  useEffect(() => { document.documentElement.dataset.session = night ? 'night' : 'day'; }, [night]);
 
   const sp = SPECIES[species];
   // Hunger is the engine's own: time since the last feed AND the funding this position

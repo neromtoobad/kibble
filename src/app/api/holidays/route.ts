@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
+import { nyseCalendar } from '@/lib/session';
 
-// NYSE closures from Backpack's public sessions API, cached for a day. The session clock consults this so a
-// holiday reads as "closed" (night theme) instead of "regular".
+// NYSE closures and 13:00 early closes for this year and next, from the rule-based calendar in
+// lib/session. The app no longer fetches this — every session check already consults the same
+// calendar — but it stays as a read for anything outside the app that wants it.
 export async function GET() {
-  try {
-    const r = await fetch('https://api.backpack.exchange/api/v1/market-holidays', { next: { revalidate: 86_400 } });
-    const j = (await r.json()) as Array<{ date?: string; endDate?: string; startDate?: string; description?: string }>;
-    const dates = j.map((h) => h.date ?? h.startDate).filter(Boolean);
-    return NextResponse.json({ dates }, { headers: { 'Cache-Control': 's-maxage=86400' } });
-  } catch {
-    return NextResponse.json({ dates: [] });
-  }
+  const year = new Date().getUTCFullYear();
+  const years = [year, year + 1].map(nyseCalendar);
+  return NextResponse.json(
+    {
+      dates: years.flatMap((c) => [...c.closed]),
+      earlyCloses: years.flatMap((c) => [...c.early]),
+      source: 'NYSE Rule 7.2, computed',
+    },
+    { headers: { 'Cache-Control': 's-maxage=86400' } },
+  );
 }

@@ -190,7 +190,7 @@ expected ≈ (4·200 − 100) / (4·0.995) = $175.88
 - **Maintenance margin is flat at 0.5%.** Bitget tiers it by notional; at the sizes a pet trades the first tier applies. Stated everywhere it's used rather than buried.
 - **Funding is applied at the 8-hour boundary using the last settled rate at or before that bar** — the published history, not a prediction.
 - **No second act yet.** The Solana edition ended with a bonding-curve launch quoted in the pet's own stock. The Bitget analogue is publishing the mandate as a **GetAgent Playbook** others can subscribe to; the schema has a `published` column and the diary has the line, but the integration isn't built.
-- **Exchange holidays** come from a public calendar; a miss shows as a normal session.
+- **Unscheduled closures are not known in advance.** The NYSE calendar — holidays and 13:00 early closes — is computed from the exchange's own rules, so Night Shift is never told the share is trading on Thanksgiving. A one-off closure, like a national day of mourning, reads as a normal session.
 
 ## Run it
 
@@ -227,7 +227,7 @@ Next.js 16 · TypeScript · Tailwind · Framer Motion · Railway (app, Postgres,
 | Perpetual tape, contracts, leverage ceilings | Bitget `mix/market/*` | none |
 | Funding rates, settled and current | Bitget `current-fund-rate`, `history-fund-rate` | none |
 | Underlying share reference price | Bitget `indexPrice` | none |
-| Market sessions & holidays | public NYSE calendar | none |
+| Market sessions & holidays | NYSE Rule 7.2, computed in `session.ts` | none |
 | What happened to the company | Yahoo Finance RSS, Google News RSS | none |
 | What the company actually filed | SEC EDGAR (8-K / 10-Q / 10-K) | none |
 | The decision | Anthropic, or anything OpenAI-compatible | your key |
