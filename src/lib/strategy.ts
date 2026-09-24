@@ -216,7 +216,9 @@ export function decide(p: Personality, bars: Bar[], i: number, s: StrategyState)
       const label = sessionAt(bar.t) === 'weekend' ? 'The weekend' : 'The night shift';
       return s.qty === 0
         ? { kind: 'open', usd: s.margin * (1 - m.reserve), lever: m.maxLever, reason: `${label}. The share is shut and this is the only price. Opened at ${m.maxLever}×.` }
-        : { kind: 'add', usd: Math.max(MIN_TICKET, deployable), reason: `${label} again. Added while nobody else could.` };
+        : deployable >= MIN_TICKET
+          ? { kind: 'add', usd: deployable, reason: `${label} again. Added while nobody else could.` }
+          : null; // fully deployed; the reserve is not a floor to round up past
     }
   }
 }

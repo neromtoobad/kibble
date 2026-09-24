@@ -52,6 +52,17 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
   }
   if (!thinking) lines.push('no model key configured — pets are running on their fixed rules');
 
+  // Each pet's most recent trade. Cooldowns and rebalance windows are measured from it, and the
+  // worker otherwise hands the engine an empty diary — which is how the live owl came to add every
+  // hour: with nothing to go on, its twelve-hour cooldown ran from the day the long was opened.
+  const lastTrade = new Map<string, Entry>();
+  const trades = await db.query<{ pet_id: string; ts: Date; kind: Entry['kind']; body: string }>(
+    `select distinct on (pet_id) pet_id, ts, kind, body from pet_entries
+      where kind = any($1) order by pet_id, ts desc`,
+    [['open', 'add', 'trim', 'flatten', 'liquidated']],
+  );
+  for (const t of trades.rows) lastTrade.set(t.pet_id, { ts: t.ts.getTime(), kind: t.kind, text: t.body });
+
   let acted = 0, waiting = 0;
   for (const r of rows) {
     // A pet holding an open question waits for its owner. The rule that matters most is the one
@@ -76,7 +87,7 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
       faints: r.faints ?? 0,
       marks: r.marks ?? [],
       lastTickAt: r.last_tick_at ? r.last_tick_at.getTime() : adoptedAt,
-      diary: [],
+      diary: lastTrade.has(r.id) ? [lastTrade.get(r.id)!] : [],
       proposal: null,
       ...(r.agent_id ? { agentId: r.agent_id } : {}),
       ...(r.wallet ? { wallet: r.wallet } : {}),
