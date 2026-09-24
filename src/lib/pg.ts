@@ -68,6 +68,9 @@ alter table pets add column if not exists funding_paid numeric not null default 
 alter table pets add column if not exists faints       int not null default 0;
 alter table pets add column if not exists marks        jsonb not null default '[]'::jsonb;
 alter table pets add column if not exists published    jsonb;
+-- Which pets have handed execution to Bitget's demo exchange, and when each row went there.
+-- Additive, like everything above: rows written before the cutover simply stay 'sim'.
+alter table pets add column if not exists execution text not null default 'sim';
 create index if not exists pets_owner_hash_idx on pets (owner_hash);
 create index if not exists pets_updated_idx    on pets (updated_at desc);
 
@@ -84,6 +87,9 @@ create table if not exists pet_entries (
   paper  boolean default true
 );
 -- One action of a given kind per timestamp: re-syncing the same window is a no-op.
+alter table pet_entries add column if not exists execution  text;
+alter table pet_entries add column if not exists order_id   text;
+alter table pet_entries add column if not exists fill_price numeric;
 create unique index if not exists pet_entries_dedupe_idx on pet_entries (pet_id, ts, kind);
 create index if not exists pet_entries_pet_ts_idx on pet_entries (pet_id, ts desc);
 

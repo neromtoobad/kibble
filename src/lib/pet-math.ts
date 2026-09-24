@@ -30,6 +30,10 @@ export type Entry = {
   usd?: number;
   sig?: string;
   paper?: boolean;
+  /** Set when Bitget's demo exchange executed this row: its order id and the price it filled at. */
+  order?: string;
+  fill?: number;
+  exec?: 'demo';
 };
 
 export type Position = {
