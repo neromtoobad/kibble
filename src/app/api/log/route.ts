@@ -17,13 +17,17 @@ import { SPECIES, type Species } from '@/lib/pets';
 //   /api/log?format=csv the same thing as a spreadsheet
 //   /api/log?full=1     includes the sensed/decided/vetoed reasoning rows, not just executions
 //
+// Rows with execution "demo" were sent to Bitget's demo exchange as market orders and carry the
+// order id and the price the exchange filled at; "sim" rows were filled by the engine at the bar
+// close. slippage_pct is what the exchange fill cost against that bar close — positive is worse.
+//
 // "Direction" needs saying plainly: a Stockling only ever holds a long. So opening or adding is a
 // BUY, and trimming, flattening or being liquidated is a SELL. There is no short side to report.
 
 export const dynamic = 'force-dynamic';
 
 const EXECUTIONS = ['open', 'add', 'trim', 'flatten', 'liquidated'];
-const REASONING = ['sensed', 'decided', 'vetoed', 'ask', 'hold', 'funding'];
+const REASONING = ['sensed', 'decided', 'vetoed', 'ask', 'hold', 'funding', 'system'];
 
 const DIRECTION: Record<string, string> = {
   open: 'BUY', add: 'BUY',
@@ -33,6 +37,7 @@ const DIRECTION: Record<string, string> = {
 type Row = {
   ts: Date; kind: string; body: string;
   qty: string | null; price: string | null; usd: string | null; paper: boolean;
+  execution: string | null; order_id: string | null; fill_price: string | null;
   name: string; species: string; marks: Array<[number, number]> | null;
 };
 
@@ -46,7 +51,7 @@ export async function GET(req: Request) {
   try {
     await ensureSchema();
     const { rows } = await pool().query<Row>(
-      `select e.ts, e.kind, e.body, e.qty, e.price, e.usd, e.paper,
+      `select e.ts, e.kind, e.body, e.qty, e.price, e.usd, e.paper, e.execution, e.order_id, e.fill_price,
               p.name, p.species, p.marks
          from pet_entries e
          join pets p on p.id = e.pet_id
@@ -71,6 +76,9 @@ export async function GET(req: Request) {
     const log = rows.map((r) => {
       const sp = SPECIES[r.species as Species['id']];
       const t = r.ts.getTime();
+      const price = r.price === null ? null : Number(r.price);
+      const fill = r.fill_price === null ? null : Number(r.fill_price);
+      const side = DIRECTION[r.kind] ?? null;
       return {
         timestamp: r.ts.toISOString(),
         agent: r.name,
@@ -85,12 +93,16 @@ export async function GET(req: Request) {
         balance_change: r.usd === null ? null : Number(r.usd),
         balance_after: balanceAt(r.marks, t),
         paper: r.paper,
+        execution: r.execution ?? 'sim',
+        order_id: r.order_id,
+        fill_price: fill,
+        slippage_pct: fill && price && side ? ((side === 'BUY' ? fill - price : price - fill) / price) * 100 : null,
         note: r.body,
       };
     });
 
     if (url.searchParams.get('format') === 'csv') {
-      const cols = ['timestamp', 'agent', 'instrument', 'underlying', 'action', 'direction', 'price', 'quantity', 'balance_change', 'balance_after', 'paper', 'note'] as const;
+      const cols = ['timestamp', 'agent', 'instrument', 'underlying', 'action', 'direction', 'price', 'quantity', 'balance_change', 'balance_after', 'paper', 'execution', 'order_id', 'fill_price', 'slippage_pct', 'note'] as const;
       const esc = (v: unknown) => {
         const s = v === null || v === undefined ? '' : String(v);
         return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -107,7 +119,8 @@ export async function GET(req: Request) {
     const first = log[0]?.timestamp ?? null;
     const last = log[log.length - 1]?.timestamp ?? null;
     return NextResponse.json({
-      note: 'Paper trading log. No order has been placed on any exchange. Every position is an isolated long on a Bitget rToken perpetual, so BUY opens or adds and SELL trims, flattens or is a liquidation.',
+      note: 'Paper trading log. Rows with execution "demo" were market orders on Bitget\'s demo exchange (demo funds, never live) and carry the order id and fill price; "sim" rows were filled by the engine at the bar close. Every position is an isolated long on a Bitget rToken perpetual, so BUY opens or adds and SELL trims, flattens or is a liquidation.',
+      demo_rows: log.filter((r) => r.execution === 'demo').length,
       rows: log.length,
       from: first,
       to: last,

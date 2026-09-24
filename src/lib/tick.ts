@@ -7,6 +7,7 @@ import type { Bar } from './bitget';
 import type { Entry, PetState, Personality, Position, Proposal } from './pet-math';
 import { ensureSchema, pool } from './pg';
 import { settleDuels } from './duels';
+import { onDemo, openBook, trade } from './execute';
 
 // One hour of the world happening to every Stockling at once.
 //
@@ -21,7 +22,7 @@ type Row = {
   adopted_at: Date; streak: number; margin: string; position: Position;
   realized: string; funding_paid: string; faints: number; marks: Array<[number, number]> | null;
   last_tick_at: Date | null;
-  agent_id: string | null; wallet: string | null; proposal: Proposal | null;
+  agent_id: string | null; wallet: string | null; proposal: Proposal | null; execution: string;
 };
 
 export async function runTick(now = Date.now()): Promise<TickSummary> {
@@ -31,7 +32,7 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
 
   const { rows } = await db.query<Row>(
     `select id, species, name, personality, adopted_at, streak, margin, position, realized,
-            funding_paid, faints, marks, last_tick_at, agent_id, wallet, proposal
+            funding_paid, faints, marks, last_tick_at, agent_id, wallet, proposal, execution
        from pets order by updated_at desc limit 500`,
   );
 
@@ -62,6 +63,16 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
     [['open', 'add', 'trim', 'flatten', 'liquidated']],
   );
   for (const t of trades.rows) lastTrade.set(t.pet_id, { ts: t.ts.getTime(), kind: t.kind, text: t.body });
+
+  // Bitget's demo exchange, when a demo key is configured. One demo account holds one position per
+  // symbol, so the first pet adopted on each demo contract is the one that trades it; every other
+  // pet, and every pet on a contract demo does not list, stays simulated.
+  const { book, note: bookNote } = await openBook();
+  if (bookNote) lines.push(bookNote);
+  const trader = new Map<string, string>();
+  for (const r of [...rows].sort((a, b) => a.adopted_at.getTime() - b.adopted_at.getTime())) {
+    if (onDemo(book, r.species as Species['id']) && !trader.has(r.species)) trader.set(r.species, r.id);
+  }
 
   let acted = 0, waiting = 0;
   for (const r of rows) {
@@ -117,9 +128,13 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
         paper: true,
       });
     }
+    let cutover = false;
+    if (book && trader.get(r.species) === r.id) {
+      cutover = await trade(book, res.pet, res.fresh, r.execution === 'demo', now, b[b.length - 1].close);
+    }
     if (!res.fresh.length && res.pet.lastTickAt === pet.lastTickAt) continue;
 
-    await write(r.id, res.pet, res.fresh);
+    await write(r.id, res.pet, res.fresh, cutover);
     if (res.fresh.length) {
       acted++;
       for (const e of res.fresh) lines.push(`${r.name} (${r.species}): ${e.kind} — ${e.text}`);
@@ -133,7 +148,7 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
 }
 
 /** Only the engine-owned columns. Name, streak and feeding belong to the browser. */
-async function write(id: string, pet: PetState, fresh: Entry[]) {
+async function write(id: string, pet: PetState, fresh: Entry[], cutover = false) {
   const db = pool();
   await db.query(
     `update pets set margin=$2, position=$3::jsonb, realized=$4, funding_paid=$5, faints=$6,
@@ -143,17 +158,29 @@ async function write(id: string, pet: PetState, fresh: Entry[]) {
      pet.faints, JSON.stringify(pet.marks ?? []), new Date(pet.lastTickAt).toISOString(),
      pet.proposal ? JSON.stringify(pet.proposal) : null],
   );
+  if (cutover) {
+    await db.query(
+      `update pets set execution = 'demo'
+        where id = $1`,
+      [id],
+    );
+  }
   if (!fresh.length) return;
 
   const values: unknown[] = [];
   const tuples = fresh.map((e, i) => {
-    const b = i * 9;
-    values.push(id, new Date(e.ts).toISOString(), e.kind, e.text, e.qty ?? null, e.price ?? null, e.usd ?? null, e.sig ?? null, e.paper ?? true);
-    return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`;
+    const b = i * 12;
+    values.push(id, new Date(e.ts).toISOString(), e.kind, e.text, e.qty ?? null, e.price ?? null, e.usd ?? null, e.sig ?? null, e.paper ?? true,
+      e.exec ?? null, e.order ?? null, e.fill ?? null);
+    return `(${Array.from({ length: 12 }, (_, j) => `$${b + j + 1}`).join(',')})`;
   });
   await db.query(
-    `insert into pet_entries (pet_id, ts, kind, body, qty, price, usd, sig, paper)
-     values ${tuples.join(',')} on conflict (pet_id, ts, kind) do nothing`,
+    `insert into pet_entries (pet_id, ts, kind, body, qty, price, usd, sig, paper, execution, order_id, fill_price)
+     values ${tuples.join(',')}
+     on conflict (pet_id, ts, kind) do update
+       set order_id   = coalesce(excluded.order_id, pet_entries.order_id),
+           fill_price = coalesce(excluded.fill_price, pet_entries.fill_price),
+           execution  = coalesce(excluded.execution, pet_entries.execution)`,
     values,
   );
 }
