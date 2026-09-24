@@ -54,10 +54,16 @@ export function runEngine(
   // measured from this, so seeding it with `adoptedAt` would put it in the future of every
   // historical bar being replayed and silence the pet forever. A pet that has never acted
   // has no cooldown to serve.
+  //
+  // And it is the LATEST action, not the position's first one. `openedAt` is when the long was
+  // opened; measured from that, every add or trim after the first looked like it had long since
+  // served its cooldown. Live, the owl re-added every hour the NYSE was shut, and the worker's
+  // Quant forgot its weekly window the moment it flattened.
   const ACTIONS = new Set<Entry['kind']>(['open', 'add', 'trim', 'flatten', 'liquidated']);
-  let lastActionAt = pet.position?.openedAt
-    ?? [...pet.diary].reverse().find((e) => ACTIONS.has(e.kind))?.ts
-    ?? 0;
+  let lastActionAt = Math.max(
+    pet.position?.openedAt ?? 0,
+    [...pet.diary].reverse().find((e) => ACTIONS.has(e.kind))?.ts ?? 0,
+  );
   const marks: Array<[number, number]> = [...(pet.marks ?? [])];
 
   /** The settled rate at or before `t`, else the most recent one we have. */
@@ -176,7 +182,12 @@ export function runEngine(
     if (!intent) continue;
 
     if (intent.kind === 'open' || intent.kind === 'add') {
-      const usd = Math.min(intent.usd, margin);
+      // The reserve and the leverage ceiling bind the fixed rules exactly as gate() binds the
+      // model. Without this a rule could push past them, and the next model call would read the
+      // breach and trim it back — a buy and a sell, two fees, and nothing decided.
+      const ceiling = Math.min(mandate.maxLever, sp.maxLever);
+      const deployable = margin * (1 - mandate.reserve) - (qty * entry) / Math.max(ceiling, 1);
+      const usd = Math.min(intent.usd, margin, deployable);
       if (usd < MIN_TICKET) continue;
       const lever = intent.kind === 'open' ? Math.min(intent.lever, sp.maxLever, mandate.maxLever) : mandate.maxLever;
       const addQty = (usd * lever) / bar.close;
