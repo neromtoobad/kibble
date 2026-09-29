@@ -151,7 +151,9 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
     'If your read is bearish, the answer is trim, flatten or hold — never open or add.',
     '',
     'Your mandate. These limits are enforced for you, automatically, whatever you answer. You never need to trade to satisfy one, and asking past one is wasted:',
-    `  leverage ceiling ${ceiling}×`,
+    // Said as a fact, not a ceiling: told only "ceiling 2×", Diamond wrote "deploying $100 at 1×"
+    // while the engine opened at 2× — a rationale that disagrees with its own execution.
+    `  leverage ${ceiling}× — every open and add runs at exactly this; you choose only how much margin`,
     `  liquidation buffer ${m.minLiqDistPct}% — closer than that and the position is trimmed for you`,
     `  funding ceiling ${m.maxFundingApr}% a year — above it the position is closed for you, and no buy is allowed`,
     m.reserve > 0
@@ -233,6 +235,12 @@ function openaiBody(p: Provider, model: string, system: string, user: string, mo
   // think long enough to time out at 40s or run out of tokens before the JSON. The decision is
   // five options and a sentence; low effort is plenty. OpenRouter only — plain OpenAI rejects it.
   if (p.openRouter) base.reasoning = { effort: 'low' };
+  // Qwen 3 models served OpenAI-style (Bitget's hackathon endpoint) think by default: on the real
+  // prompt qwen3.8-max ran past 40s before answering. With thinking off it answers in about two
+  // seconds and honours json_schema, which is what a pet judged every fifteen minutes — and live
+  // in the browser — needs. The rationale it writes is still its own reasoning, just not a
+  // hidden draft of it.
+  else if (/^qwen/i.test(model)) base.enable_thinking = false;
   return base;
 }
 
