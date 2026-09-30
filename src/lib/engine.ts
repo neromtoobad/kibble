@@ -1,4 +1,4 @@
-import { decide, gate, MANDATES, MIN_TICKET, TAKER_FEE, fundingApr, type Intent, type StrategyState } from './strategy';
+import { carry, decide, gate, MANDATES, MIN_TICKET, TAKER_FEE, fundingApr, type Intent, type StrategyState } from './strategy';
 import type { Judgement } from './brain';
 import { MAINTENANCE, isPaper, liquidationPrice, liquidationDistance, leverage, type Actor, type Entry, type PetState, type Pinky, type PinkyOutcome } from './pet-math';
 import { SPECIES } from './pets';
@@ -95,7 +95,7 @@ export function runEngine(
       price,
       lever: leverage(pseudo, price),
       liqDistPct: liquidationDistance(pseudo, price),
-      fundingRate: rateAt(t),
+      fundingRate: carry(fundingRates, t), // a day's settlements, not the last print — see carry()
       lastActionAt,
       totalFed: margin + qty * entry,
     };

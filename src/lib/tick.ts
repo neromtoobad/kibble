@@ -10,7 +10,7 @@ import { settleDuels } from './duels';
 import { onDemo, openBook, trade } from './execute';
 import { genesis, link, type ChainRow } from './chain';
 import { SLEEP_CAP, kennelGuard, realizedVol, sleepWindow, stormCap, type Guard, type KennelStatus } from './risk';
-import { MANDATES } from './strategy';
+import { MANDATES, carry } from './strategy';
 
 // One hour of the world happening to every Stockling at once.
 //
@@ -132,7 +132,7 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
     let judgement = null;
     if (thinking && unseen.length) {
       const last = b[b.length - 1];
-      const rate = funds.get(r.species)?.at(-1)?.rate ?? 0;
+      const rate = carry(funds.get(r.species) ?? [], now); // the same carry the mandate judges
       // What the risk layer will enforce this tick, in words, so the model plans inside it.
       const constraints: string[] = [];
       const kv = kennels.get(r.owner_hash)?.status;

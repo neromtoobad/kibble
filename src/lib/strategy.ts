@@ -69,6 +69,23 @@ const FUNDING_PER_YEAR = (24 / 8) * 365;
 
 export const fundingApr = (rate: number) => rate * FUNDING_PER_YEAR * 100;
 
+/**
+ * The carry a mandate judges: the mean of the settlements in the last 24 hours (three, on the
+ * 8-hour clock), or the latest one if none fell in that window. One print is weather; a day of them
+ * is the price of holding. Judged on the last print alone, Lurk opened RDDT on a quiet 5%-a-year
+ * settlement, was flattened at a loss when the next one printed 231%, and did it again the next day.
+ * The pet still pays every real settlement — this only decides what the limit is compared against.
+ */
+export function carry(rates: Array<{ t: number; rate: number }>, t: number): number {
+  let last = 0, sum = 0, n = 0;
+  for (const f of rates) {
+    if (f.t > t) break;
+    last = f.rate;
+    if (f.t > t - 24 * 3600e3) { sum += f.rate; n++; }
+  }
+  return n ? sum / n : last;
+}
+
 /** Highest close in the trailing `hours` before `i`. */
 function recentHigh(bars: Bar[], i: number, hours = 24): number {
   let hi = 0;

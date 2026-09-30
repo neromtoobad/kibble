@@ -175,7 +175,7 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
   ].join('\n');
 
   const user = [
-    `Right now: ${sp.ticker} at $${price.toFixed(2)}. Funding ${apr.toFixed(0)}% a year${apr > m.maxFundingApr ? ' — ABOVE your limit' : ''}.`,
+    `Right now: ${sp.ticker} at $${price.toFixed(2)}. Funding ${apr.toFixed(0)}% a year, averaged over the last day's settlements${apr > m.maxFundingApr ? ' — ABOVE your limit' : ''}.`,
     qty > 0
       ? [
           `You hold ${qty.toFixed(4)} contracts from $${(pet.position?.entry ?? 0).toFixed(2)}: $${(qty * price).toFixed(2)} of exposure at ${lev.toFixed(1)}× (ceiling ${ceiling}×)${liqDist !== null ? `, liquidation ${liqDist.toFixed(1)}% below the price` : ''}.`,
