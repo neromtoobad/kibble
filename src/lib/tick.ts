@@ -8,6 +8,7 @@ import type { Entry, PetState, Personality, Position, Proposal } from './pet-mat
 import { ensureSchema, pool } from './pg';
 import { settleDuels } from './duels';
 import { onDemo, openBook, trade } from './execute';
+import { genesis, link, type ChainRow } from './chain';
 import { SLEEP_CAP, kennelGuard, realizedVol, sleepWindow, stormCap, type Guard, type KennelStatus } from './risk';
 import { MANDATES } from './strategy';
 
@@ -161,6 +162,8 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
         ts: judgement.ts,
         text: `Read ${unseen.length} new item${unseen.length === 1 ? '' : 's'}: ${unseen.slice(0, 3).map((e) => e.title).join(' · ')}${unseen.length > 3 ? ` (+${unseen.length - 3} more)` : ''}`,
         kind: 'sensed',
+        by: 'model',
+        meta: { events: unseen.slice(0, 12).map((e) => ({ kind: e.kind, at: e.at ?? null, title: e.title, source: e.source ?? null })) },
         paper: true,
       });
     }
@@ -212,20 +215,41 @@ async function write(id: string, pet: PetState, fresh: Entry[], cutover = false)
   }
   if (!fresh.length) return;
 
+  // Chain every row onto this pet's current head: the one hashed row nothing points back to yet.
+  const head = await db.query<{ hash: string }>(
+    `select e.hash from pet_entries e
+      where e.pet_id = $1 and e.hash is not null
+        and not exists (select 1 from pet_entries n where n.pet_id = e.pet_id and n.prev_hash = e.hash)
+      limit 1`,
+    [id],
+  );
+  let prev = head.rows[0]?.hash ?? genesis(id);
+  for (const e of fresh) {
+    const row: ChainRow = {
+      petId: id, ts: e.ts, kind: e.kind, body: e.text, qty: e.qty ?? null, price: e.price ?? null, usd: e.usd ?? null,
+      execution: e.exec ?? null, orderId: e.order ?? null, fillPrice: e.fill ?? null, by: e.by ?? null, meta: e.meta ?? null,
+    };
+    e.prev = prev;
+    e.hash = link(prev, row);
+    prev = e.hash;
+  }
+
   const values: unknown[] = [];
   const tuples = fresh.map((e, i) => {
-    const b = i * 12;
+    const b = i * 16;
     values.push(id, new Date(e.ts).toISOString(), e.kind, e.text, e.qty ?? null, e.price ?? null, e.usd ?? null, e.sig ?? null, e.paper ?? true,
-      e.exec ?? null, e.order ?? null, e.fill ?? null);
-    return `(${Array.from({ length: 12 }, (_, j) => `$${b + j + 1}`).join(',')})`;
+      e.exec ?? null, e.order ?? null, e.fill ?? null, e.by ?? null, e.meta ? JSON.stringify(e.meta) : null, e.hash ?? null, e.prev ?? null);
+    return `(${Array.from({ length: 16 }, (_, j) => `${b + j + 1}`).join(',')})`;
   });
+  // A row the browser synced first is overwritten with the worker's copy, so what is stored is
+  // exactly what was hashed. The worker's windows never overlap, so it never rewrites its own rows.
   await db.query(
-    `insert into pet_entries (pet_id, ts, kind, body, qty, price, usd, sig, paper, execution, order_id, fill_price)
+    `insert into pet_entries (pet_id, ts, kind, body, qty, price, usd, sig, paper, execution, order_id, fill_price, by_actor, meta, hash, prev_hash)
      values ${tuples.join(',')}
      on conflict (pet_id, ts, kind) do update
-       set order_id   = coalesce(excluded.order_id, pet_entries.order_id),
-           fill_price = coalesce(excluded.fill_price, pet_entries.fill_price),
-           execution  = coalesce(excluded.execution, pet_entries.execution)`,
+       set body = excluded.body, qty = excluded.qty, price = excluded.price, usd = excluded.usd,
+           execution = excluded.execution, order_id = excluded.order_id, fill_price = excluded.fill_price,
+           by_actor = excluded.by_actor, meta = excluded.meta, hash = excluded.hash, prev_hash = excluded.prev_hash`,
     values,
   );
 }

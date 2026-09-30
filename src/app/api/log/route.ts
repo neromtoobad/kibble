@@ -38,6 +38,7 @@ type Row = {
   ts: Date; kind: string; body: string;
   qty: string | null; price: string | null; usd: string | null; paper: boolean;
   execution: string | null; order_id: string | null; fill_price: string | null;
+  by_actor: string | null; meta: Record<string, unknown> | null; hash: string | null;
   name: string; species: string; marks: Array<[number, number]> | null;
 };
 
@@ -51,7 +52,7 @@ export async function GET(req: Request) {
   try {
     await ensureSchema();
     const { rows } = await pool().query<Row>(
-      `select e.ts, e.kind, e.body, e.qty, e.price, e.usd, e.paper, e.execution, e.order_id, e.fill_price,
+      `select e.ts, e.kind, e.body, e.qty, e.price, e.usd, e.paper, e.execution, e.order_id, e.fill_price, e.by_actor, e.meta, e.hash,
               p.name, p.species, p.marks
          from pet_entries e
          join pets p on p.id = e.pet_id
@@ -97,12 +98,17 @@ export async function GET(req: Request) {
         order_id: r.order_id,
         fill_price: fill,
         slippage_pct: fill && price && side ? ((side === 'BUY' ? fill - price : price - fill) / price) * 100 : null,
+        // Who made it happen — the model, the fixed rules, or a named risk layer — and the row's link in
+        // the hash chain (/api/chain, npm run verify).
+        by: r.by_actor,
+        hash: r.hash,
+        ...(full && r.meta ? { meta: r.meta } : {}),
         note: r.body,
       };
     });
 
     if (url.searchParams.get('format') === 'csv') {
-      const cols = ['timestamp', 'agent', 'instrument', 'underlying', 'action', 'direction', 'price', 'quantity', 'balance_change', 'balance_after', 'paper', 'execution', 'order_id', 'fill_price', 'slippage_pct', 'note'] as const;
+      const cols = ['timestamp', 'agent', 'instrument', 'underlying', 'action', 'direction', 'price', 'quantity', 'balance_change', 'balance_after', 'paper', 'execution', 'order_id', 'fill_price', 'slippage_pct', 'by', 'hash', 'note'] as const;
       const esc = (v: unknown) => {
         const s = v === null || v === undefined ? '' : String(v);
         return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

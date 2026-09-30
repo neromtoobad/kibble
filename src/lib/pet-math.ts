@@ -21,6 +21,12 @@ export type Personality = 'diamond' | 'degen' | 'boomer' | 'quant' | 'owl';
 export type EntryKind =
   | 'feed' | 'open' | 'add' | 'trim' | 'flatten' | 'funding' | 'hold' | 'ask' | 'liquidated' | 'system'
   | 'sensed' | 'decided' | 'vetoed';
+/**
+ * Who made a diary line happen. The audit trail has to say whether the model chose it, the fixed
+ * rules did, or one of the risk layers overruled both — otherwise "the risk layer works" is a claim.
+ */
+export type Actor = 'model' | 'rules' | 'mandate' | 'storm' | 'weekend' | 'kennel' | 'kill' | 'market' | 'exchange' | 'owner';
+
 export type Entry = {
   ts: number;
   text: string;
@@ -34,6 +40,16 @@ export type Entry = {
   order?: string;
   fill?: number;
   exec?: 'demo';
+  by?: Actor;
+  /**
+   * Structured detail a reader should not have to parse out of prose: on a model decision its
+   * model, confidence and citations; on a refusal or a clamp, the trade that was wanted and did
+   * not happen — the shadow the Guardian's ledger scores.
+   */
+  meta?: Record<string, unknown>;
+  /** The hash chain, set by the worker when it writes the row. */
+  hash?: string;
+  prev?: string;
 };
 
 export type Position = {

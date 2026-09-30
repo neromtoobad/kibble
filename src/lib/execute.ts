@@ -71,7 +71,7 @@ export async function trade(book: Book, pet: PetState, fresh: Entry[], alreadyLi
   const k = book.contracts.get(sp.symbol)!;
   const mandate = MANDATES[pet.personality];
   let t = now; // system rows need distinct timestamps: (pet, ts, kind) is unique
-  const note = (text: string, extra: Partial<Entry> = {}) => fresh.push({ ts: ++t, kind: 'system', text, paper: true, ...extra });
+  const note = (text: string, extra: Partial<Entry> = {}) => fresh.push({ ts: ++t, kind: 'system', text, paper: true, by: 'exchange', ...extra });
 
   try {
     await setIsolated(book.creds, sp.symbol).catch(() => {}); // refused once a position exists; it is already isolated

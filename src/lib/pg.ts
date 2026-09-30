@@ -90,6 +90,12 @@ create table if not exists pet_entries (
 alter table pet_entries add column if not exists execution  text;
 alter table pet_entries add column if not exists order_id   text;
 alter table pet_entries add column if not exists fill_price numeric;
+-- Who made the line happen, structured detail for audit, and the hash chain (see lib/chain.ts).
+alter table pet_entries add column if not exists by_actor  text;
+alter table pet_entries add column if not exists meta      jsonb;
+alter table pet_entries add column if not exists hash      text;
+alter table pet_entries add column if not exists prev_hash text;
+create index if not exists pet_entries_chain_idx on pet_entries (pet_id, prev_hash);
 create unique index if not exists pet_entries_dedupe_idx on pet_entries (pet_id, ts, kind);
 create index if not exists pet_entries_pet_ts_idx on pet_entries (pet_id, ts desc);
 

@@ -16,8 +16,8 @@ import type { Bar } from './bitget';
 export type Intent =
   | { kind: 'open'; usd: number; lever: number; reason: string }
   | { kind: 'add'; usd: number; reason: string }
-  | { kind: 'trim'; fraction: number; reason: string }
-  | { kind: 'flatten'; reason: string }
+  | { kind: 'trim'; fraction: number; reason: string; risk?: boolean }
+  | { kind: 'flatten'; reason: string; risk?: boolean }
   | { kind: 'propose'; usd: number; reason: string }  // needs the owner's nod
   | { kind: 'hold'; reason: string };
 
@@ -94,14 +94,14 @@ function riskCheck(m: Mandate, s: StrategyState): Intent | null {
   if (s.liqDistPct !== null && s.liqDistPct < m.minLiqDistPct) {
     // Halve the position rather than close it: staying in the trade is the point,
     // staying alive is the constraint.
-    return { kind: 'trim', fraction: 0.5, reason: `Liquidation only ${s.liqDistPct.toFixed(1)}% away. Cut the position in half to back off the edge.` };
+    return { kind: 'trim', fraction: 0.5, risk: true, reason: `Liquidation only ${s.liqDistPct.toFixed(1)}% away. Cut the position in half to back off the edge.` };
   }
   const apr = fundingApr(s.fundingRate);
   if (apr > m.maxFundingApr) {
-    return { kind: 'flatten', reason: `Funding is ${apr.toFixed(0)}% a year and my limit is ${m.maxFundingApr}%. Not paying that to hold. Closed.` };
+    return { kind: 'flatten', risk: true, reason: `Funding is ${apr.toFixed(0)}% a year and my limit is ${m.maxFundingApr}%. Not paying that to hold. Closed.` };
   }
   if (s.lever > m.maxLever * 1.25) {
-    return { kind: 'trim', fraction: 1 - m.maxLever / s.lever, reason: `Leverage drifted to ${s.lever.toFixed(1)}×. Trimmed back toward ${m.maxLever}×.` };
+    return { kind: 'trim', fraction: 1 - m.maxLever / s.lever, risk: true, reason: `Leverage drifted to ${s.lever.toFixed(1)}×. Trimmed back toward ${m.maxLever}×.` };
   }
   return null;
 }
