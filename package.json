@@ -17,7 +17,8 @@
     "exectest": "tsx --env-file-if-exists=.env.local scripts/exectest.ts",
     "risktest": "tsx scripts/risktest.ts",
     "chaintest": "tsx scripts/chaintest.ts",
-    "verify": "tsx scripts/verify.ts"
+    "verify": "tsx scripts/verify.ts",
+    "universetest": "tsx scripts/universetest.ts"
   },
   "dependencies": {
     "framer-motion": "^13.4.0",

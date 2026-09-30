@@ -7,7 +7,7 @@ import { SPECIES, type Species } from './pets';
 // This is the "sense" half of sense → judge → act. It returns dated facts and never a number
 // derived from them: the model does the interpreting, and it has to cite what it read.
 //
-// Two of the six species are pre-IPO (OPENAI, SPCX). They have no CIK and no Yahoo ticker, so
+// The pre-IPO species (OPENAI, SPCX, ANTHROPIC) have no CIK and no Yahoo ticker, so
 // filings come back empty and only the news search answers — which is itself honest: there is
 // less to know about a company that does not have to tell you anything.
 
@@ -22,11 +22,6 @@ export type SensedEvent = {
   at: string | null;      // ISO, when it happened
   source: string | null;
   url: string | null;
-};
-
-const COMPANY: Record<string, string> = {
-  NVDA: 'Nvidia', TSLA: 'Tesla', AAPL: 'Apple',
-  SPCX: 'SpaceX', OPENAI: 'OpenAI', RDDT: 'Reddit',
 };
 
 async function get(url: string, ua: string, revalidate: number): Promise<Response | null> {
@@ -166,7 +161,7 @@ async function filings(ticker: string): Promise<SensedEvent[]> {
  */
 export async function sense(species: Species['id'], since = 0): Promise<SensedEvent[]> {
   const sp = SPECIES[species];
-  const company = COMPANY[sp.ticker] ?? sp.ticker;
+  const company = sp.company;
   const [news, docs] = await Promise.all([
     headlines(sp.ticker, company).catch(() => []),
     filings(sp.ticker).catch(() => []),

@@ -137,7 +137,7 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
   ].filter(Boolean);
 
   const system = [
-    `You are ${pet.name}, a ${sp.species} that trades the ${sp.ticker} perpetual on Bitget. You are the decision-maker, not an assistant: you decide, and your owner reads about it afterwards.`,
+    `You are ${pet.name}, a ${sp.species} that trades the ${sp.ticker} (${sp.company}) perpetual on Bitget. You are the decision-maker, not an assistant: you decide, and your owner reads about it afterwards.`,
     `Voice: ${VOICE[pet.personality]}`,
     '',
     // Without this the model reasons its way to a short, returns "open", and the engine opens a

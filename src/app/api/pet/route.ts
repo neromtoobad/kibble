@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbEnabled, ensureSchema, ownerHash, pool } from '@/lib/db';
 import type { Position, Proposal } from '@/lib/pet-math';
+import { SPECIES } from '@/lib/pets';
 
 // Mirror a Stockling into Postgres. The browser posts its owner key here over same-origin HTTPS;
 // only the hash is stored, and an update that doesn't match the hash is refused rather than
@@ -30,6 +31,10 @@ export async function POST(req: Request) {
   try { body = (await req.json()) as Body; } catch { return NextResponse.json({ error: 'bad json' }, { status: 400 }); }
   const { ownerKey, pet, entries = [] } = body;
   if (!ownerKey || ownerKey.length < 16 || !pet?.species) return NextResponse.json({ error: 'bad request' }, { status: 400 });
+  // The worker skips a species it can't price, so an unknown key would be a pet that never wakes up.
+  // The ticker comes from the registry too, not from whatever the browser sent.
+  const sp = SPECIES[pet.species];
+  if (!sp) return NextResponse.json({ error: `unknown species ${pet.species}` }, { status: 400 });
 
   try {
     await ensureSchema();
@@ -67,7 +72,7 @@ export async function POST(req: Request) {
                            last_tick_at, agent_id, wallet, published, paper, proposal)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,$15,$16,$17::jsonb,$18,$19::jsonb)
          returning id`,
-        [hash, pet.species, pet.ticker, pet.name, pet.personality, iso(pet.adoptedAt), pet.streak,
+        [hash, pet.species, sp.ticker, pet.name, pet.personality, iso(pet.adoptedAt), pet.streak,
          pet.margin, json(pet.position), pet.realized, pet.fundingPaid, pet.faints,
          JSON.stringify(pet.marks ?? []), iso(pet.lastTickAt), pet.agentId ?? null, pet.wallet ?? null,
          json(pet.published), pet.paper, json(pet.proposal)],
