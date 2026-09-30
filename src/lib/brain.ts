@@ -116,7 +116,7 @@ const VOICE: Record<Personality, string> = {
   owl: 'Nocturnal, unhurried, quietly superior about working nights.',
 };
 
-function prompt(pet: PetState, price: number, fundingRate: number, events: SensedEvent[]) {
+function prompt(pet: PetState, price: number, fundingRate: number, events: SensedEvent[], constraints: string[] = []) {
   const sp = SPECIES[pet.species];
   const m = MANDATES[pet.personality];
   const qty = pet.position?.qty ?? 0;
@@ -174,6 +174,9 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
     breached.length
       ? `Limit breached, and being enforced for you this hour: ${breached.join('; ')}.`
       : 'Every limit in your mandate is satisfied right now.',
+    // The risk layer beyond the mandate — kennel breaker, weekend guard, storm sense. Told up front
+    // so the model does not ask for a buy that is certain to be refused.
+    ...(constraints.length ? ['These also apply right now, and are enforced for you:', ...constraints.map((c) => `  ${c}`)] : []),
     pet.faints > 0 ? `You have fainted ${pet.faints} time(s) before. It was unpleasant.` : '',
     '',
     events.length ? 'What has happened since you last looked:' : 'Nothing new has happened since you last looked.',
@@ -377,12 +380,14 @@ export async function judge(opts: {
   fundingRate: number;
   events: SensedEvent[];
   now?: number;
+  /** Plain-language limits from the risk layer that apply this tick. */
+  constraints?: string[];
 }): Promise<Judgement | null> {
   const p = provider();
   if (!p) return null;
   if (!opts.events.length) return null;
 
-  const { system, user } = prompt(opts.pet, opts.price, opts.fundingRate, opts.events);
+  const { system, user } = prompt(opts.pet, opts.price, opts.fundingRate, opts.events, opts.constraints);
   const answered = await call(p, system, user).catch((e) => {
     console.error(`brain: ${(e as Error).message}`);
     return null;

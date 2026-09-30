@@ -8,7 +8,8 @@ import type { Entry, PetState, Personality, Position, Proposal } from './pet-mat
 import { ensureSchema, pool } from './pg';
 import { settleDuels } from './duels';
 import { onDemo, openBook, trade } from './execute';
-import { kennelGuard, type Guard, type KennelStatus } from './risk';
+import { SLEEP_CAP, kennelGuard, realizedVol, sleepWindow, stormCap, type Guard, type KennelStatus } from './risk';
+import { MANDATES } from './strategy';
 
 // One hour of the world happening to every Stockling at once.
 //
@@ -131,7 +132,17 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
     if (thinking && unseen.length) {
       const last = b[b.length - 1];
       const rate = funds.get(r.species)?.at(-1)?.rate ?? 0;
-      judgement = await judge({ pet, price: last.close, fundingRate: rate, events: unseen, now }).catch(() => null);
+      // What the risk layer will enforce this tick, in words, so the model plans inside it.
+      const constraints: string[] = [];
+      const kv = kennels.get(r.owner_hash)?.status;
+      if (kv && kv.breaker !== 'armed' && kv.reason) constraints.push(`Kennel breaker: ${kv.reason}`);
+      if (sleepWindow(last.t)) constraints.push(`Weekend guard: until Monday's open you carry no more than ${SLEEP_CAP}×.`);
+      const vol = realizedVol(b, b.length - 1);
+      const cap = stormCap(MANDATES[r.personality].volBudget, vol);
+      if (cap !== null && cap < MANDATES[r.personality].maxLever) {
+        constraints.push(`Storm sense: ${SPECIES[r.species as Species['id']].ticker} ran at ${Math.round((vol ?? 0) * 100)}% volatility over two days, so your budget allows at most ${cap.toFixed(1)}× right now.`);
+      }
+      judgement = await judge({ pet, price: last.close, fundingRate: rate, events: unseen, now, constraints }).catch(() => null);
       if (judgement) {
         lines.push(`${r.name}: read ${unseen.length} events → ${judgement.intent.kind} (${(judgement.confidence * 100).toFixed(0)}% sure, ${judgement.model})`);
       }
