@@ -16,7 +16,13 @@ export const PERSONALITY_NAME: Record<Personality, string> = {
 const C = { canvas: '#F6F5EE', surface: '#FFFFFF', ink: '#111111', muted: '#6B6F66', line: '#E4E3DA', accent: '#C8FF3D', up: '#178F62', down: '#D6403F' };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const day = (t: number) => { const d = new Date(t); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
-const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+/** Shorten to at most n characters, at a word boundary, with an ellipsis. */
+const clip = (s: string, n: number) => {
+  if (s.length <= n) return s;
+  const cut = s.slice(0, n - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > n * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.—-]+$/, '')}…`;
+};
 
 let fonts: Promise<Array<{ name: string; data: Buffer; weight: 600 | 700; style: 'normal' }>> | null = null;
 const loadFonts = () => (fonts ??= Promise.all(

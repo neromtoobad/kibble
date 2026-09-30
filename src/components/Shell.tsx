@@ -145,7 +145,7 @@ function Desk({ path }: { path: string }) {
                     <span aria-hidden>{ICON[e.kind] ?? '•'}</span> {e.agent} · {e.ticker} · {now ? ago(now - e.ts) : ''}
                     {o && <span className="ml-1 font-semibold" style={{ color: o.color }}>· {o.label}</span>}
                   </span>
-                  <span className="line-clamp-2 block text-[12.5px] leading-snug">{e.text}</span>
+                  <span className="line-clamp-2 text-[12.5px] leading-snug">{e.text}</span>
                 </span>
               </li>
             );
