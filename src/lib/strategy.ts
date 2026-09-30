@@ -42,15 +42,20 @@ export type Mandate = {
   maxFundingApr: number;
   /** Fraction of margin kept unused as a buffer. */
   reserve: number;
+  /**
+   * Storm sense: the most annualised volatility the position may carry — leverage times the
+   * stock's own recent volatility. In calm water it never binds; in a storm it cuts leverage.
+   */
+  volBudget: number;
   blurb: string;
 };
 
 export const MANDATES: Record<Personality, Mandate> = {
-  diamond: { maxLever: 2, minLiqDistPct: 25, maxFundingApr: 200, reserve: 0, blurb: 'Two times, forever. Adds on every open, never trims for price — only to stay alive.' },
-  degen:   { maxLever: 8, minLiqDistPct: 12, maxFundingApr: 120, reserve: 0, blurb: 'Eight times on dips, at any hour. Cools off for six hours after each move.' },
-  boomer:  { maxLever: 1.5, minLiqDistPct: 40, maxFundingApr: 25, reserve: 0.3, blurb: 'One and a half times, regular hours only, a third of the margin never deployed.' },
-  quant:   { maxLever: 3, minLiqDistPct: 30, maxFundingApr: 15, reserve: 0.1, blurb: 'Three times, rebalanced weekly, and it will not pay over 15% a year to carry.' },
-  owl:     { maxLever: 4, minLiqDistPct: 20, maxFundingApr: 60, reserve: 0.1, blurb: 'Only acts while the NYSE is shut — the hours the share cannot trade and the perp can.' },
+  diamond: { maxLever: 2, minLiqDistPct: 25, maxFundingApr: 200, reserve: 0, volBudget: 0.6, blurb: 'Two times, forever. Adds on every open, never trims for price — only to stay alive.' },
+  degen:   { maxLever: 8, minLiqDistPct: 12, maxFundingApr: 120, reserve: 0, volBudget: 2.4, blurb: 'Eight times on dips, at any hour. Cools off for six hours after each move.' },
+  boomer:  { maxLever: 1.5, minLiqDistPct: 40, maxFundingApr: 25, reserve: 0.3, volBudget: 0.45, blurb: 'One and a half times, regular hours only, a third of the margin never deployed.' },
+  quant:   { maxLever: 3, minLiqDistPct: 30, maxFundingApr: 15, reserve: 0.1, volBudget: 0.9, blurb: 'Three times, rebalanced weekly, and it will not pay over 15% a year to carry.' },
+  owl:     { maxLever: 4, minLiqDistPct: 20, maxFundingApr: 60, reserve: 0.1, volBudget: 1.2, blurb: 'Only acts while the NYSE is shut — the hours the share cannot trade and the perp can.' },
 };
 
 const MIN_TICKET = 5;            // Bitget's own minimum on these contracts

@@ -2,7 +2,9 @@ import { decide, gate, MANDATES, MIN_TICKET, TAKER_FEE, fundingApr, type Intent,
 import type { Judgement } from './brain';
 import { MAINTENANCE, isPaper, liquidationPrice, liquidationDistance, leverage, type Entry, type PetState } from './pet-math';
 import { SPECIES } from './pets';
+import { OPEN_GUARD, SLEEP_CAP, STORM_SLACK, lastRegularClose, realizedVol, sleepWindow, stormCap, type Guard } from './risk';
 import type { Bar } from './bitget';
+import { nyseSession } from './session';
 
 // Replays the hours since the pet last ticked and applies whatever its strategy decided.
 // Deterministic: the same bars, funding and state always produce the same actions, so the
@@ -31,6 +33,10 @@ export function runEngine(
   // function stays pure and a replay of the same inputs always produces the same diary. It
   // applies to the last bar of the window — the one the model actually looked at.
   judgement?: Judgement | null,
+  // What the owner's kennel allows this tick — the daily-loss and drawdown breakers, the exposure
+  // cap and the kill switch, computed by the worker across all of the owner's pets. An input for
+  // the same reason the judgement is: so this function stays pure.
+  guard: Guard = OPEN_GUARD,
 ): TickResult {
   const from = pet.lastTickAt || pet.adoptedAt;
   const window = bars.filter((b) => b.t > from && b.t <= now).sort((a, b) => a.t - b.t);
@@ -90,6 +96,28 @@ export function runEngine(
       totalFed: margin + qty * entry,
     };
   };
+
+  const trimBy = (fraction: number, price: number, t: number, text: string) => {
+    const cut = Math.max(0, Math.min(0.95, fraction)) * qty;
+    if (cut <= 0) return;
+    const gross = cut * (price - entry);
+    const fee = cut * price * TAKER_FEE;
+    realized += gross - fee;
+    margin += gross - fee;
+    qty -= cut;
+    if (qty < 1e-9) { qty = 0; entry = 0; openedAt = 0; }
+    lastActionAt = t;
+    fresh.push({ ts: t, text, kind: 'trim', qty: cut, price, usd: gross - fee, paper });
+  };
+  const leverAt = (price: number) => leverage({ ...pet, margin, position: qty > 0 ? { qty, entry, openedAt } : null } as PetState, price);
+  // One refusal line per tick is an explanation; one per bar is noise.
+  const said = new Set<string>();
+  const once = (key: string, t: number, text: string) => {
+    if (said.has(key)) return;
+    said.add(key);
+    fresh.push({ ts: t, text, kind: 'vetoed', paper });
+  };
+  let room = guard.exposureRoom;
 
   const closeAll = (price: number, t: number, kind: Entry['kind'], text: string) => {
     if (qty <= 0) return;
@@ -155,7 +183,45 @@ export function runEngine(
     // series is what Sharpe and drawdown are defined over.
     marks.push([bar.t, margin + qty * (bar.close - entry)]);
 
-    // ── 3. the agent acts ─────────────────────────────────────────────
+    // ── 3. the kennel and the calendar, before the pet gets a say ──────
+    // These outrank the model and the personality alike: a kill switch, a kennel below its
+    // drawdown line, and a weekend coming are not things a pet gets to have an opinion about.
+    if (qty > 0 && guard.halt) {
+      closeAll(bar.close, bar.t, 'flatten', `${guard.halt} Closed everything.`);
+      proposal = null;
+      continue;
+    }
+    if (qty > 0 && guard.deleverTo !== null && leverAt(bar.close) > guard.deleverTo * 1.02) {
+      const lev = leverAt(bar.close);
+      trimBy(1 - guard.deleverTo / lev, bar.close, bar.t, `${guard.noNewRisk ?? 'Kennel breaker.'} Cut from ${lev.toFixed(1)}× to ${guard.deleverTo}×.`);
+      continue;
+    }
+    const sleeping = sleepWindow(bar.t);
+    if (qty > 0 && sleeping && leverAt(bar.close) > SLEEP_CAP * 1.02) {
+      const lev = leverAt(bar.close);
+      const friday = lastRegularClose(bars, i < 0 ? 0 : i);
+      // While the share still trades there is no gap yet; once it has shut, the perp's drift from
+      // the last real close is the gap that will be waiting at Monday's bell.
+      const shut = nyseSession(new Date(bar.t)) !== 'regular';
+      const gap = shut && friday
+        ? ` The perp is ${((bar.close / friday - 1) * 100).toFixed(2)}% from the share's last close — that is the gap waiting at the bell.`
+        : shut ? '' : ' The share stops trading at 16:00 ET and does not trade again until the bell.';
+      trimBy(1 - SLEEP_CAP / lev, bar.close, bar.t, `Weekend guard: the share stops trading and I don't carry more than ${SLEEP_CAP}× through that. Cut from ${lev.toFixed(1)}×.${gap}`);
+      continue;
+    }
+
+    // Storm sense: the position may not carry more volatility than the mandate budgets for.
+    // Diamond Hands is exempt from the cut — it never trims for price — but not from the cap on buys.
+    const vol = realizedVol(bars, i < 0 ? 0 : i);
+    const stormLever = stormCap(mandate.volBudget, vol);
+    if (qty > 0 && stormLever !== null && pet.personality !== 'diamond' && leverAt(bar.close) > stormLever * STORM_SLACK) {
+      const lev = leverAt(bar.close);
+      trimBy(1 - stormLever / lev, bar.close, bar.t,
+        `Storm sense: ${sp.ticker} has run at ${Math.round((vol ?? 0) * 100)}% volatility over two days, and my budget carries ${Math.round(mandate.volBudget * 100)}% — ${stormLever.toFixed(1)}× at most. Cut from ${lev.toFixed(1)}×.`);
+      continue;
+    }
+
+    // ── 4. the agent acts ─────────────────────────────────────────────
     if (proposal) continue; // one open question at a time; the pet waits for an answer
 
     const state = snapshot(bar.close, bar.t);
@@ -182,14 +248,36 @@ export function runEngine(
     if (!intent) continue;
 
     if (intent.kind === 'open' || intent.kind === 'add') {
+      if (guard.noNewRisk) { once('kennel', bar.t, `Wanted to ${intent.kind}, refused: ${guard.noNewRisk}`); continue; }
       // The reserve and the leverage ceiling bind the fixed rules exactly as gate() binds the
       // model. Without this a rule could push past them, and the next model call would read the
       // breach and trim it back — a buy and a sell, two fees, and nothing decided.
       const ceiling = Math.min(mandate.maxLever, sp.maxLever);
       const deployable = margin * (1 - mandate.reserve) - (qty * entry) / Math.max(ceiling, 1);
-      const usd = Math.min(intent.usd, margin, deployable);
-      if (usd < MIN_TICKET) continue;
-      const lever = intent.kind === 'open' ? Math.min(intent.lever, sp.maxLever, mandate.maxLever) : mandate.maxLever;
+      let usd = Math.min(intent.usd, margin, deployable);
+      let lever = intent.kind === 'open' ? Math.min(intent.lever, sp.maxLever, mandate.maxLever) : mandate.maxLever;
+      const notes: string[] = [];
+      // Weekend guard: nothing goes on above the sleep-well cap while the share cannot trade.
+      if (sleeping) {
+        lever = Math.min(lever, SLEEP_CAP);
+        const equityNow = margin + qty * (bar.close - entry);
+        const headroom = Math.max(0, SLEEP_CAP * equityNow - qty * bar.close) / lever;
+        if (headroom < usd) { usd = headroom; notes.push(`weekend guard, ≤${SLEEP_CAP}×`); }
+      }
+      // Storm sense: no buy takes the position past what the volatility budget allows.
+      if (stormLever !== null) {
+        const equityNow = margin + qty * (bar.close - entry);
+        const headroom = Math.max(0, stormLever * equityNow - qty * bar.close) / lever;
+        if (headroom < usd) { usd = headroom; notes.push(`storm sense, ≤${stormLever.toFixed(1)}× at ${Math.round((vol ?? 0) * 100)}% volatility`); }
+      }
+      // The kennel's exposure cap, shared with the owner's other pets.
+      if (room !== null && usd * lever > room) { usd = room / lever; notes.push('kennel exposure cap'); }
+      if (usd < MIN_TICKET) {
+        if (notes.length) once('small', bar.t, `Wanted to ${intent.kind}, but after ${notes.join(' and ')} it came to under $${MIN_TICKET}. Held.`);
+        continue;
+      }
+      if (room !== null) room -= usd * lever;
+      if (notes.length) intent = { ...intent, reason: `${intent.reason} (${notes.join('; ')}.)` };
       const addQty = (usd * lever) / bar.close;
       const fee = addQty * bar.close * TAKER_FEE;
       if (fee >= margin) continue;
@@ -200,16 +288,7 @@ export function runEngine(
       lastActionAt = bar.t;
       fresh.push({ ts: bar.t, text: intent.reason, kind: intent.kind, qty: addQty, price: bar.close, usd, paper });
     } else if (intent.kind === 'trim') {
-      const cut = Math.max(0, Math.min(0.95, intent.fraction)) * qty;
-      if (cut <= 0) continue;
-      const gross = cut * (bar.close - entry);
-      const fee = cut * bar.close * TAKER_FEE;
-      realized += gross - fee;
-      margin += gross - fee;
-      qty -= cut;
-      if (qty < 1e-9) { qty = 0; entry = 0; openedAt = 0; }
-      lastActionAt = bar.t;
-      fresh.push({ ts: bar.t, text: intent.reason, kind: 'trim', qty: cut, price: bar.close, usd: gross - fee, paper });
+      trimBy(intent.fraction, bar.close, bar.t, intent.reason);
     } else if (intent.kind === 'flatten') {
       closeAll(bar.close, bar.t, 'flatten', intent.reason);
     } else if (intent.kind === 'propose') {

@@ -8,6 +8,7 @@ import type { Entry, PetState, Personality, Position, Proposal } from './pet-mat
 import { ensureSchema, pool } from './pg';
 import { settleDuels } from './duels';
 import { onDemo, openBook, trade } from './execute';
+import { kennelGuard, type Guard, type KennelStatus } from './risk';
 
 // One hour of the world happening to every Stockling at once.
 //
@@ -23,6 +24,7 @@ type Row = {
   realized: string; funding_paid: string; faints: number; marks: Array<[number, number]> | null;
   last_tick_at: Date | null;
   agent_id: string | null; wallet: string | null; proposal: Proposal | null; execution: string;
+  owner_hash: string;
 };
 
 export async function runTick(now = Date.now()): Promise<TickSummary> {
@@ -32,7 +34,7 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
 
   const { rows } = await db.query<Row>(
     `select id, species, name, personality, adopted_at, streak, margin, position, realized,
-            funding_paid, faints, marks, last_tick_at, agent_id, wallet, proposal, execution
+            funding_paid, faints, marks, last_tick_at, agent_id, wallet, proposal, execution, owner_hash
        from pets order by updated_at desc limit 500`,
   );
 
@@ -72,6 +74,23 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
   const trader = new Map<string, string>();
   for (const r of [...rows].sort((a, b) => a.adopted_at.getTime() - b.adopted_at.getTime())) {
     if (onDemo(book, r.species as Species['id']) && !trader.has(r.species)) trader.set(r.species, r.id);
+  }
+
+  // The kennel breaker: one verdict per owner, from all of that owner's pets together — their
+  // combined hourly equity curve, their combined notional, and the owner's own kill switch.
+  const lastClose = (species: string) => bars.get(species)?.at(-1)?.close ?? 0;
+  const notionalOf = (qty: number | undefined, species: string) => (qty ?? 0) * lastClose(species);
+  const controls = await db.query<{ owner_hash: string; halted: boolean; reason: string | null }>(
+    `select owner_hash, halted, reason from kennel_controls where halted = true`,
+  );
+  const halted = new Map(controls.rows.map((c) => [c.owner_hash, c.reason ?? 'pulled by the owner.']));
+  const kennels = new Map<string, { guard: Guard; status: KennelStatus }>();
+  for (const owner of new Set(rows.map((r) => r.owner_hash))) {
+    const mine = rows.filter((r) => r.owner_hash === owner);
+    const notional = mine.reduce((s, r) => s + notionalOf(r.position?.qty, r.species), 0);
+    const k = kennelGuard(mine.map((r) => r.marks ?? []), notional, now, halted.get(owner) ?? null);
+    kennels.set(owner, k);
+    if (k.status.breaker !== 'armed') lines.push(`kennel of ${mine.length}: ${k.status.breaker} — ${k.status.reason}`);
   }
 
   let acted = 0, waiting = 0;
@@ -118,7 +137,13 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
       }
     }
 
-    const res = runEngine(pet, b, funds.get(r.species) ?? [], now, judgement);
+    const kennel = kennels.get(r.owner_hash);
+    const res = runEngine(pet, b, funds.get(r.species) ?? [], now, judgement, kennel?.guard);
+    // The exposure cap is shared: whatever this pet just added comes out of its kennel-mates' room.
+    if (kennel && kennel.guard.exposureRoom !== null) {
+      const added = notionalOf(res.pet.position?.qty, r.species) - notionalOf(r.position?.qty, r.species);
+      kennel.guard = { ...kennel.guard, exposureRoom: Math.max(0, (kennel.guard.exposureRoom ?? 0) - added) };
+    }
     // The sensing itself is part of the record: what it read, whether or not it acted.
     if (judgement && unseen.length) {
       res.fresh.unshift({
@@ -139,6 +164,15 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
       acted++;
       for (const e of res.fresh) lines.push(`${r.name} (${r.species}): ${e.kind} — ${e.text}`);
     }
+  }
+
+  // What each kennel's breaker said this tick, for the app and /api/metrics to show.
+  for (const [owner, k] of kennels) {
+    await db.query(
+      `insert into kennel_controls (owner_hash, status, updated_at) values ($1, $2::jsonb, now())
+       on conflict (owner_hash) do update set status = excluded.status, updated_at = now()`,
+      [owner, JSON.stringify({ ...k.status, at: now })],
+    );
   }
 
   // Duels end on the hour they were due, whether or not either owner is around to watch.

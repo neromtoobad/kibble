@@ -93,6 +93,16 @@ alter table pet_entries add column if not exists fill_price numeric;
 create unique index if not exists pet_entries_dedupe_idx on pet_entries (pet_id, ts, kind);
 create index if not exists pet_entries_pet_ts_idx on pet_entries (pet_id, ts desc);
 
+-- The owner's kill switch, and the kennel breaker's latest verdict as the worker last saw it.
+-- One row per owner; the worker writes status every tick, the owner writes halted.
+create table if not exists kennel_controls (
+  owner_hash text primary key,
+  halted     boolean not null default false,
+  reason     text,
+  status     jsonb,
+  updated_at timestamptz not null default now()
+);
+
 -- A duel is 24 hours, two Stocklings, best percentage move wins. Both portfolios are valued at the
 -- challenge and again at the bell; storing the opening value is what makes the result checkable
 -- afterwards instead of a claim.

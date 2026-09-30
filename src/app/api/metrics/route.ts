@@ -74,6 +74,14 @@ export async function GET() {
       };
     });
 
+    // The kennel breaker as the worker last computed it: combined equity, today's change, drawdown
+    // from peak, exposure, and whether a breaker or the kill switch is holding the pets back.
+    const kennelRows = await pool().query<{ halted: boolean; status: Record<string, unknown> | null; names: string[] | null }>(
+      `select k.halted, k.status,
+              (select array_agg(p.name order by p.adopted_at) from pets p where p.owner_hash = k.owner_hash) as names
+         from kennel_controls k order by k.updated_at desc limit 50`,
+    ).catch(() => ({ rows: [] as Array<{ halted: boolean; status: Record<string, unknown> | null; names: string[] | null }> }));
+
     const sum = (k: 'trades' | 'decisions' | 'vetoed_or_clamped' | 'funding_payments' | 'faints' | 'closes') =>
       agents.reduce((s, x) => s + x[k], 0);
     return NextResponse.json({
@@ -85,6 +93,7 @@ export async function GET() {
         vetoed_or_clamped: sum('vetoed_or_clamped'), funding_payments: sum('funding_payments'), faints: sum('faints'),
       },
       agents,
+      kennels: kennelRows.rows.map((k) => ({ pets: k.names ?? [], halted: k.halted, ...(k.status ?? {}) })),
     }, { headers: { 'Cache-Control': 's-maxage=60' } });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

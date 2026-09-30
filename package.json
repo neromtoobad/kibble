@@ -14,7 +14,8 @@
     "gatetest": "tsx scripts/gatetest.ts",
     "braintest": "tsx --env-file-if-exists=.env.local scripts/braintest.ts",
     "gatea0": "tsx --env-file-if-exists=.env.local scripts/gate-a0.ts",
-    "exectest": "tsx --env-file-if-exists=.env.local scripts/exectest.ts"
+    "exectest": "tsx --env-file-if-exists=.env.local scripts/exectest.ts",
+    "risktest": "tsx scripts/risktest.ts"
   },
   "dependencies": {
     "framer-motion": "^13.4.0",

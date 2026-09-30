@@ -132,6 +132,12 @@ export function nextOpen(now: Date = new Date()): number {
   throw new Error('no NYSE session in the next two weeks'); // unreachable: no closure lasts that long
 }
 
+/** New York's weekday and minutes past midnight at `t`, for rules that care about the clock itself. */
+export function nyseClock(t: number): { weekday: string; mins: number } {
+  const { weekday, mins } = et(new Date(t));
+  return { weekday, mins };
+}
+
 export const isNight = (s: Session) => s === 'overnight' || s === 'weekend' || s === 'holiday';
 
 export const sessionLabel: Record<Session, string> = {
