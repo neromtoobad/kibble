@@ -134,7 +134,16 @@ export default function Home() {
         <span className="rounded-full border px-3 py-1.5 text-[12px] num" style={{ borderColor: night ? 'var(--accent)' : 'var(--ink)', color: night ? 'var(--accent)' : 'var(--ink)', boxShadow: night ? 'var(--glow)' : 'none' }}>
           {night ? '☾' : '☀'} {sessionLabel[session]}
         </span>
-        <span className="text-[13px] font-semibold" style={{ color: 'var(--muted)' }}>{pet?.name ?? sp.name} · day {pet?.streak ?? 1}</span>
+        <span className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: 'var(--muted)' }}>
+          {pet?.name ?? sp.name} · day {pet?.streak ?? 1}
+          {pet && remoteId && (
+            // The pet's public page unfurls to its share card; X's intent keeps the post the owner's own.
+            <a className="rounded-full border px-2.5 py-1 text-[12px]" style={{ borderColor: 'var(--line)', color: 'var(--ink)' }} target="_blank" rel="noopener"
+              href={`https://x.com/intent/post?text=${encodeURIComponent(`Meet ${pet.name}, my ${sp.species.toLowerCase()} — an AI agent trading the ${sp.ticker} perpetual on Bitget. Every buy is a pinky promise, graded in public.`)}&url=${encodeURIComponent(`${typeof window === 'undefined' ? '' : window.location.origin}/p/${remoteId}`)}`}>
+              Share ↗
+            </a>
+          )}
+        </span>
       </div>
 
       <div className="relative mt-5 flex flex-col items-center">
