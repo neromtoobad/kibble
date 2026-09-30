@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Confetti } from '@/components/Confetti';
@@ -45,7 +46,11 @@ export default function Adopt() {
         {step === 'egg' && (
           <motion.section key="egg" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <h1 className="mt-5 text-center text-[32px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Pick a stock</h1>
-            <p className="mb-4 mt-1 text-center text-[14px]" style={{ color: 'var(--muted)' }}>The stock decides which Stockling hatches. It will hold that stock&rsquo;s perpetual on Bitget.</p>
+            <p className="mt-1 text-center text-[14px]" style={{ color: 'var(--muted)' }}>The stock decides which Stockling hatches. It will hold that stock&rsquo;s perpetual on Bitget.</p>
+            {/* A first visit lands here, with no tab bar; someone who only came to look needs a way out. */}
+            <p className="mb-4 mt-2 text-center text-[13px] font-semibold">
+              Just looking? <Link href="/duels" className="underline underline-offset-2">Meet the live agents</Link> · <Link href="/proof" className="underline underline-offset-2">See the proof</Link>
+            </p>
             <StockPicker pick={pick} onPick={setPick} />
             <div className="sticky bottom-0 -mx-4 mt-4 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-6" style={{ background: 'linear-gradient(to bottom, transparent, var(--canvas) 40%)' }}>
               <button onClick={hatch} disabled={!pick} className="pill w-full text-[18px] disabled:opacity-40">
