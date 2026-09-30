@@ -119,7 +119,8 @@ Sub-theme: **Event-Driven Agent** — *"How do news / announcements / macro even
 |---|---|
 | Runnable demo | the app |
 | event → decision → execution flow | `sensed` → `decided` → `vetoed` → `open` in the diary; `npm run gatetest` proves the ordering |
-| **Paper trading log**, run during the competition | the hourly worker writes one to Postgres |
+| **Paper trading log**, run during the competition | [`/api/log`](https://app-production-98c2.up.railway.app/api/log) (`?format=csv`, `?full=1` for the reasoning rows), written every 15 minutes since 2026-09-20. Since 2026-09-30, three of the five agents execute on Bitget's demo exchange and their rows carry the order id and fill |
+| Sharpe, max drawdown, win rate | [`/api/metrics`](https://app-production-98c2.up.railway.app/api/metrics), computed live by `metrics.ts` from each agent's hourly equity marks |
 | Compliant X post | *(yours to post)* |
 
 Judging is 50% quantitative — paper Sharpe, max drawdown, win rate — plus decision explainability, agent architecture, and **risk-control effectiveness**. [metrics.ts](src/lib/metrics.ts) computes the first three from the engine's own hourly equity marks rather than asserting them. Explainability is the diary: every line names what was read and why. The risk-control layer is `gate()`, and it is the one part of this that is allowed to tell the model no.
@@ -182,11 +183,27 @@ expected ≈ (4·200 − 100) / (4·0.995) = $175.88
 ✓ survives a wick that stops short
 ```
 
+**`npm run exectest`** drives the execution layer against Bitget's demo exchange: the cutover, an add, a reduce-only trim, a position changed behind the engine's back, and a flatten, checking what the exchange holds after each. It needs a demo key and moves demo funds only. Run of 2026-09-24, verbatim:
+
+```
+✓ cutover mirrors the simulated position onto the exchange
+    system order 1487026767821996033 fill $222.54 vs bar $222.70
+✓ an add goes out as a market buy and the row keeps the order id and fill
+    add order 1487026783231868929 fill $222.56 vs bar $222.70
+✓ a trim goes out reduce-only
+    trim order 1487026801493868545 fill $222.47 vs bar $222.70
+✓ drift behind the engine's back is squared up, and the correction is written down
+    The demo exchange held 0.4 NVDAUSDT and the book says 0.35. Squared it up: sold 0.05 at $222.47.
+✓ a flatten closes the exchange position completely
+    flatten order 1487026842895843329 fill $222.47 vs bar $222.70
+```
+
 ## Honest limits
 
-- **Everything is paper.** No Bitget Agentic Account is wired up yet, so no order has been placed on any exchange. Every surface that shows a number says **paper**, and `isPaper()` is a single function so it can't drift. The engine, the funding, the liquidation math and the tape are all real; the execution is not.
+- **No real money, anywhere. Three of the five agents execute on Bitget's demo exchange.** Since 2026-09-30 07:08 UTC, every open, add, trim and close that Nova (`NVDAUSDT`), Volt (`TSLAUSDT`) and Pip (`AAPLUSDT`) make is sent to Bitget's demo environment as a market order. The log row carries the order id and the fill, and `slippage_pct` compares that fill with the bar close the engine booked. Every request carries `paptrading: 1`, and no code path leaves it out, so the key can only move demo funds. Nimbus (`OPENAIUSDT`) and Lurk (`RDDTUSDT`) are not listed on demo, so they stay simulated and fill at the bar close. Every log row says which: `demo` or `sim`.
+- **The engine still keeps the books.** On demo pets the exchange does the executing. Equity, funding and liquidation in the log and the metrics are still the engine's; the exchange's own funding debits and liquidations are not read back yet. Every tick squares the exchange position up with the engine's and writes down any correction it made. Sizes snap to Bitget's 0.01-contract step, and Bitget refuses orders under 5 USDT, so the exchange can trail the book by a few dollars until the next square-up.
 - **The five personalities in the table below are the fixed-rule baseline, not the model.** They are what the pet does with no key configured, and what the model is measured against. The harness scores that baseline over historical bars; it does not replay the model over them, because the news that drove a decision three weeks ago is not reconstructible per-bar and pretending otherwise would manufacture a track record.
-- **The paper log is days old, not weeks.** The track recommends ≥2 weeks. The hourly worker started on 2026-09-18. What's in the log is what genuinely accumulated.
+- **The log starts on 2026-09-20.** The database was recreated when the project moved, so the published log begins at 08:00 UTC that day and nothing before it is backfilled. The track recommends ≥2 weeks.
 - **Maintenance margin is flat at 0.5%.** Bitget tiers it by notional; at the sizes a pet trades the first tier applies. Stated everywhere it's used rather than buried.
 - **Funding is applied at the 8-hour boundary using the last settled rate at or before that bar** — the published history, not a prediction.
 - **No second act yet.** The Solana edition ended with a bonding-curve launch quoted in the pet's own stock. The Bitget analogue is publishing the mandate as a **GetAgent Playbook** others can subscribe to; the schema has a `published` column and the diary has the line, but the integration isn't built.
@@ -206,7 +223,9 @@ npm run harness -- nova 30   # replay all five personalities on real bars + fund
 npm run gatetest             # prove the mandate overrules the model, and it is logged
 npm run liqtest              # prove liquidation fires on the wick, and only then
 npm run sqlcheck             # every column named in SQL exists in the schema
-npm run worker               # one tick of the hourly worker by hand
+npm run worker               # one tick of the worker by hand
+npm run gatea0               # six calls against Bitget's demo exchange: account, mode, buy, position, close, fills
+npm run exectest             # the execution layer end to end on demo; leaves the position flat
 ```
 
 Optional, in `.env.local` — the app runs with none of them:
@@ -214,6 +233,9 @@ Optional, in `.env.local` — the app runs with none of them:
 ```
 ANTHROPIC_API_KEY=sk-...        # or OPENAI_API_KEY (+ OPENAI_BASE_URL for anything compatible)
 DATABASE_URL=postgresql://...   # Railway → Postgres → DATABASE_PUBLIC_URL
+BITGET_DEMO_KEY=...             # a key created from inside Bitget's Demo mode; a live key answers 40099
+BITGET_DEMO_SECRET=...
+BITGET_DEMO_PASSPHRASE=...
 ```
 
 Without a model key the pets run on their fixed rules and `/api/judge` answers `{judgement: null}`; sensing still works, because the feeds need no key. Without a database the Board is empty and nothing syncs, and the pet runs entirely from `localStorage`. Every screen works either way.
@@ -230,7 +252,8 @@ Next.js 16 · TypeScript · Tailwind · Framer Motion · Railway (app, Postgres,
 | Market sessions & holidays | NYSE Rule 7.2, computed in `session.ts` | none |
 | What happened to the company | Yahoo Finance RSS, Google News RSS | none |
 | What the company actually filed | SEC EDGAR (8-K / 10-Q / 10-K) | none |
-| The decision | Anthropic, or anything OpenAI-compatible | your key |
+| The decision | `qwen3.8-max` on Bitget's hackathon endpoint (`hackathon.bitgetops.com/v1`); Anthropic or anything OpenAI-compatible also works | your key |
+| Execution for Nova, Volt, Pip | Bitget demo trading, `mix/order/place-order` and `mix/order/fills`, always with `paptrading: 1` | demo API key |
 
 A device proves ownership with a random key kept in its own `localStorage` — only the SHA-256 reaches the database, and a write whose hash doesn't match is refused rather than forking a second pet.
 
@@ -240,4 +263,4 @@ The engine is pure, so the browser and the hourly worker produce identical actio
 
 Character art generated with Higgsfield from the prompts recorded in `docs/DESIGN.md`, carried over from the sibling project along with the design tokens.
 
-*Not financial advice. Everything is paper. The pets are fictional; the funding rates are not.*
+*Not financial advice. No real money moves: every trade is simulated or on Bitget's demo exchange. The pets are fictional; the funding rates are not.*
