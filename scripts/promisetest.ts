@@ -119,6 +119,16 @@ console.log('\n═══ exceptions ═══\n');
   check(JSON.stringify(a.fresh) === JSON.stringify(r0.fresh), 'the same inputs replay to the same promise, byte for byte');
 }
 
+{
+  // Stopped out and promising again on the same bar: two promise rows in one hour must not share a key.
+  const t1 = SAT + H;
+  const bars = [...start, ...path(t1, [98], { 0: 96.5 })];
+  const r = runEngine(r0.pet, bars, [], t1, opened(t1, { ...ASK, target: 104, stop: 94 }));
+  const keys = r.fresh.map((e) => `${e.ts}|${e.kind}`);
+  check(vows(r.fresh).join() === 'stopped,made' && new Set(keys).size === keys.length && Boolean(r.pet.position?.pinky),
+    'a stop and a new promise in the same bar get distinct diary keys', r.fresh.map((e) => `${e.kind}@+${e.ts - t1}ms`).join(' '));
+}
+
 // ── the scorecard ──────────────────────────────────────────────────────
 console.log('\n═══ the scorecard ═══\n');
 {

@@ -391,6 +391,17 @@ export function runEngine(
     }
   }
 
+  // Postgres keys the diary on (pet, ts, kind), so two rows of one kind in one bar — a stop and a new
+  // promise, a mandate clamp and a kennel refusal — would collide, and a collision inside one insert
+  // fails the whole tick. Each repeat moves a millisecond later: same hour, same order, every row kept.
+  const seen = new Map<string, number>();
+  for (const e of fresh) {
+    const key = `${e.ts}|${e.kind}`;
+    const n = seen.get(key) ?? 0;
+    seen.set(key, n + 1);
+    if (n) e.ts += n;
+  }
+
   const next: PetState = {
     ...pet,
     margin,
