@@ -43,7 +43,7 @@ const PATH = [
   { href: '/adopt', title: `Adopt any of ${SPECIES_LIST.length}`, text: 'Every liquid Bitget stock perpetual, hatching the animal of its sector.' },
 ];
 
-type Board = { id: string; name: string; species: string; ticker: string; personality: string; execution: string | null; pnlPct: number | null; faints: number };
+type Board = { id: string; name: string; species: string; ticker: string; personality: string; execution: string | null; returnPct: number | null; faints: number };
 type Feed = { ts: number; kind: string; text: string; by: string | null; agent: string; species: string; ticker: string; outcome: string | null };
 
 const ICON: Record<string, string> = { decided: '🧠', promise: '🤙', open: '📈', add: '➕', trim: '✂️', flatten: '⏹', vetoed: '🛑', liquidated: '💀' };
@@ -66,7 +66,7 @@ function Desk({ path }: { path: string }) {
     const load = async () => {
       const [b, f] = await Promise.all([get<{ rows: Board[] }>('/api/leaderboard'), get<{ rows: Feed[] }>('/api/feed?limit=10')]);
       if (!alive) return;
-      if (b) setBoard([...b.rows].sort((x, y) => (y.pnlPct ?? -1e9) - (x.pnlPct ?? -1e9)));
+      if (b) setBoard(b.rows); // already ranked by return
       if (f) setFeed(f.rows);
       setNow(Date.now());
     };
@@ -123,8 +123,8 @@ function Desk({ path }: { path: string }) {
                 <span className="block truncate text-[13.5px] font-semibold leading-tight"><Link href={`/p/${r.id}`} className="hover:underline">{r.name}</Link> <span className="num text-[11.5px] font-medium" style={{ color: 'var(--muted)' }}>{r.ticker}</span></span>
                 <span className="block text-[11.5px] leading-tight" style={{ color: 'var(--muted)' }}>{r.personality}{r.execution === 'demo' ? ' · Bitget demo' : ' · simulated'}{r.faints ? ` · fainted ${r.faints}×` : ''}</span>
               </span>
-              <span className="num text-[13px] font-semibold" style={{ color: r.pnlPct == null || r.pnlPct === 0 ? undefined : r.pnlPct > 0 ? 'var(--up)' : 'var(--down)' }}>
-                {r.pnlPct == null ? '—' : `${r.pnlPct > 0 ? '+' : ''}${r.pnlPct.toFixed(2)}%`}
+              <span className="num text-[13px] font-semibold" style={{ color: r.returnPct == null || r.returnPct === 0 ? undefined : r.returnPct > 0 ? 'var(--up)' : 'var(--down)' }}>
+                {r.returnPct == null ? 'new' : `${r.returnPct > 0 ? '+' : ''}${r.returnPct.toFixed(2)}%`}
               </span>
             </li>
           ))}

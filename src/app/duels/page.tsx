@@ -12,7 +12,7 @@ type Row = {
   id: string; name: string; species: Species['id']; ticker: string; personality: Personality;
   streak: number; paper: boolean; execution?: string; isPublic: boolean;
   qty: number; basis: number; value: number | null; price: number | null;
-  pnlAbs: number | null; pnlPct: number | null; lever: number; faints: number; fundingPaid: number; margin: number;
+  pnlAbs: number | null; pnlPct: number | null; returnPct: number | null; lever: number; faints: number; fundingPaid: number; margin: number;
 };
 
 type Pulse = { actions: number; afterHours: number };
@@ -62,7 +62,7 @@ export default function Board() {
     <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))]">
       <h1 className="text-center text-[28px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Board</h1>
       <p className="text-center text-[13px]" style={{ color: 'var(--muted)' }}>
-        Ranked by real P&amp;L. Nobody reports their own score.
+        Ranked by return since each pet’s first hourly mark, at the live price. Nobody reports their own score.
       </p>
 
       {pulse && pulse.actions > 0 && (
@@ -96,7 +96,7 @@ export default function Board() {
       <ul className="mt-4 grid gap-2">
         {rows?.map((r, i) => {
           const isMine = r.id === mine;
-          const up = (r.pnlPct ?? 0) >= 0;
+          const up = (r.returnPct ?? 0) >= 0;
           return (
             <li key={r.id} className="card flex items-center gap-3 px-3 py-2.5"
               style={isMine ? { outline: '3px solid var(--accent)' } : undefined}>
@@ -114,7 +114,7 @@ export default function Board() {
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[15px] font-bold num" style={{ color: up ? 'var(--up)' : 'var(--down)' }}>
-                  {r.pnlPct === null ? '—' : `${up ? '+' : ''}${r.pnlPct.toFixed(2)}%`}
+                  {r.returnPct === null ? 'new' : `${up ? '+' : ''}${r.returnPct.toFixed(2)}%`}
                 </p>
                 <p className="text-[11.5px] num" style={{ color: 'var(--muted)' }}>
                   {r.value === null ? '' : `$${r.value.toFixed(2)}`}
