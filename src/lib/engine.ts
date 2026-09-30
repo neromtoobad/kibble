@@ -1,6 +1,6 @@
 import { decide, gate, MANDATES, MIN_TICKET, TAKER_FEE, fundingApr, type Intent, type StrategyState } from './strategy';
 import type { Judgement } from './brain';
-import { MAINTENANCE, isPaper, liquidationPrice, liquidationDistance, leverage, type Actor, type Entry, type PetState } from './pet-math';
+import { MAINTENANCE, isPaper, liquidationPrice, liquidationDistance, leverage, type Actor, type Entry, type PetState, type Pinky, type PinkyOutcome } from './pet-math';
 import { SPECIES } from './pets';
 import { OPEN_GUARD, SLEEP_CAP, STORM_SLACK, lastRegularClose, realizedVol, sleepWindow, stormCap, type Guard } from './risk';
 import type { Bar } from './bitget';
@@ -18,6 +18,9 @@ import { nyseSession } from './session';
 //   2. LIQUIDATION is checked against the bar's LOW, not its close — a wick that touches the
 //      liquidation price liquidates you, and pretending otherwise would flatter every pet.
 //   3. The personality gets to act.
+//
+// Before any of that, a pinky promise's stop is a resting order: it is checked against the wick
+// first, because a stop above the liquidation price is always reached on the way down before it.
 
 export type TickResult = { pet: PetState; fresh: Entry[]; from: number; to: number };
 
@@ -56,6 +59,7 @@ export function runEngine(
   let fundingPaid = pet.fundingPaid;
   let faints = pet.faints;
   let proposal = pet.proposal ?? null;
+  let pinky: Pinky | undefined = pet.position?.pinky;
   // When the pet last ACTED — not when it was adopted. Cooldowns and rebalance windows are
   // measured from this, so seeding it with `adoptedAt` would put it in the future of every
   // historical bar being replayed and silence the pet forever. A pet that has never acted
@@ -108,6 +112,7 @@ export function runEngine(
     if (qty < 1e-9) { qty = 0; entry = 0; openedAt = 0; }
     lastActionAt = t;
     fresh.push({ ts: t, text, kind: 'trim', qty: cut, price, usd: gross - fee, paper, by });
+    orphan(t, by);
   };
   const leverAt = (price: number) => leverage({ ...pet, margin, position: qty > 0 ? { qty, entry, openedAt } : null } as PetState, price);
   // One refusal line per tick is an explanation; one per bar is noise.
@@ -138,10 +143,54 @@ export function runEngine(
     entry = 0;
     openedAt = 0;
     lastActionAt = t;
+    orphan(t, by);
   };
+
+  const vow = (t: number, outcome: PinkyOutcome, text: string, by: Actor, p: Pinky, extra?: Record<string, unknown>) =>
+    fresh.push({ ts: t, text, kind: 'promise', paper, by, meta: { outcome, pinky: p, ...extra } });
+  /** The position ended some other way while a promise was still open: say so, so it is graded. */
+  function orphan(t: number, by: Actor) {
+    if (!pinky || qty > 0) return;
+    const p = pinky;
+    pinky = undefined;
+    if (!p.hit) vow(t, 'closed', `Closed before my promise resolved: "${bare(p.thesis)}"`, by, p);
+  }
+  const bare = (t: string) => t.trim().replace(/[.!?]+$/, '');
+  const hours = (a: number, b: number) => Math.max(1, Math.round((b - a) / 3600e3));
+  // Diamond Hands never sells on price, so its promises are graded, not enforced — a stop that its
+  // own rules re-bought an hour later would only be two fees.
+  const enforced = pet.personality !== 'diamond';
 
   for (const bar of window) {
     const i = bars.findIndex((b) => b.t === bar.t);
+
+    // ── 0. the pinky promise: stop, target, deadline ─────────────────
+    if (qty > 0 && pinky) {
+      const p = pinky;
+      if (bar.low <= p.stop) {
+        // A stop fills at the stop, or at the open if the bar gapped through it.
+        const fill = Math.min(p.stop, bar.open);
+        pinky = undefined;
+        if (!p.hit) {
+          vow(bar.t, 'stopped', enforced
+            ? `Wrong this time: "${bare(p.thesis)}". ${sp.ticker} traded down to my $${p.stop.toFixed(2)} stop ${hours(p.ts, bar.t)}h after I said it, so I'm out, as promised.`
+            : `Wrong this time: "${bare(p.thesis)}". ${sp.ticker} traded down to $${p.stop.toFixed(2)}, where I said I'd be wrong. I was. I don't sell, though.`,
+            'promise', p, { at: fill });
+        }
+        if (enforced) closeAll(fill, bar.t, 'flatten', p.hit
+          ? `Gave the move back to my entry, $${p.stop.toFixed(2)}. Out flat, as promised once the target was in.`
+          : `Stopped out at $${fill.toFixed(2)}.`, 'promise');
+      } else if (!p.hit && bar.high >= p.target) {
+        pinky = { ...p, hit: true, stop: enforced ? Math.max(p.stop, entry) : p.stop };
+        vow(bar.t, 'target', `Called it: "${bare(p.thesis)}". ${sp.ticker} reached $${p.target.toFixed(2)} ${hours(p.ts, bar.t)}h after I said it would.${enforced ? ` My stop moves up to my entry, $${entry.toFixed(2)}.` : ''}`, 'promise', p, { at: p.target });
+      } else if (bar.t >= p.until) {
+        pinky = undefined;
+        if (!p.hit) {
+          const move = (bar.close / p.entry - 1) * 100;
+          vow(bar.t, 'expired', `Out of time: "${bare(p.thesis)}". ${sp.ticker} is at $${bar.close.toFixed(2)}, ${move >= 0 ? '+' : ''}${move.toFixed(1)}% from where I promised, and neither the target nor the stop came. The position stays; the promise is over.`, 'promise', p, { at: bar.close });
+        }
+      }
+    }
 
     // ── 1. funding settles ────────────────────────────────────────────
     if (qty > 0 && isFundingBar(bar.t)) {
@@ -183,6 +232,7 @@ export function runEngine(
         });
         qty = 0; entry = 0; openedAt = 0; margin = Math.max(0, lost);
         faints += 1;
+        orphan(bar.t, 'market');
         lastActionAt = bar.t;
         proposal = null;
         continue; // nothing else happens on the bar you faint
@@ -249,7 +299,8 @@ export function runEngine(
         kind: 'decided',
         paper,
         by: 'model',
-        meta: { model: judgement.model, confidence: judgement.confidence, cited: judgement.cited, action: judgement.intent.kind },
+        meta: { model: judgement.model, confidence: judgement.confidence, cited: judgement.cited, action: judgement.intent.kind,
+          ...(judgement.intent.kind === 'open' || judgement.intent.kind === 'add' ? { promised: Boolean(judgement.intent.pinky) } : {}) },
       });
       // What the model wanted, if the mandate cut it: a buy that did not happen, or did not happen
       // in full, is the shadow trade the Guardian's ledger scores against what the price did next.
@@ -315,6 +366,19 @@ export function runEngine(
       lastActionAt = bar.t;
       fresh.push({ ts: bar.t, text: intent.reason, kind: intent.kind, qty: addQty, price: bar.close, usd, paper, by: judged ? 'model' : 'rules',
         ...(layers.length ? { meta: { clampedBy: layers, ...shadow(wantedUsd - usd, lever, bar.close) } } : {}) });
+      if (judged && intent.pinky) {
+        // A new promise on an add replaces the open one, which is graded as ended rather than dropped.
+        if (pinky && !pinky.hit) vow(bar.t, 'closed', `Replaced by a new promise: "${bare(pinky.thesis)}"`, 'model', pinky);
+        const ask = intent.pinky;
+        // A stop at or under the liquidation price is a promise the exchange would break first.
+        const liq = liquidationPrice({ ...pet, margin, position: { qty, entry, openedAt } } as PetState);
+        const stop = Math.max(ask.stop, liq !== null && liq > 0 ? liq * 1.01 : 0);
+        pinky = { ts: bar.t, thesis: ask.thesis, entry: bar.close, target: ask.target, stop, until: bar.t + ask.hours * 3600e3 };
+        const due = new Date(pinky.until).toISOString().slice(0, 16).replace('T', ' ');
+        vow(bar.t, 'made', `Pinky promise: ${bare(ask.thesis)}. Target $${ask.target.toFixed(2)} by ${due} UTC. ${enforced
+          ? `If ${sp.ticker} trades at $${stop.toFixed(2)} I was wrong, and I'm out.`
+          : `If ${sp.ticker} trades at $${stop.toFixed(2)} I was wrong — I'll say so, but I won't sell.`}${stop > ask.stop ? ` (The stop I asked for, $${ask.stop.toFixed(2)}, was past my liquidation price.)` : ''}`, 'model', pinky);
+      }
     } else if (intent.kind === 'trim') {
       trimBy(intent.fraction, bar.close, bar.t, intent.reason, intent.risk ? 'mandate' : judged ? 'model' : 'rules');
     } else if (intent.kind === 'flatten') {
@@ -330,7 +394,7 @@ export function runEngine(
   const next: PetState = {
     ...pet,
     margin,
-    position: qty > 0 ? { qty, entry, openedAt } : null,
+    position: qty > 0 ? { qty, entry, openedAt, ...(pinky ? { pinky } : {}) } : null,
     realized,
     fundingPaid,
     faints,

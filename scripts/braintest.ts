@@ -52,6 +52,12 @@ async function main() {
   console.log(`   confidence: ${(j.confidence * 100).toFixed(0)}%`);
   console.log(`   rationale:  ${j.rationale}`);
   console.log(`   cited:      ${j.cited.length ? j.cited.map((c) => `\n                 · ${c.slice(0, 70)}`).join('') : '(nothing it was actually shown)'}`);
+  if (j.intent.kind === 'open' || j.intent.kind === 'add') {
+    const p = j.intent.pinky;
+    console.log(p
+      ? `   promise:    "${p.thesis}"\n               target $${p.target} · stop $${p.stop} · ${p.hours}h (at $220: +${((p.target / 220 - 1) * 100).toFixed(1)}% / ${((p.stop / 220 - 1) * 100).toFixed(1)}%)`
+      : '   promise:    none — the buy was made without one');
+  }
 
   // And what the mandate does about it — the half that does not depend on the model.
   const g = gate(MANDATES[personality], {

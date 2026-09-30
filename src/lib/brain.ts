@@ -1,5 +1,5 @@
 import type { SensedEvent } from './feeds';
-import { MANDATES, MIN_TICKET, fundingApr, type Intent } from './strategy';
+import { MANDATES, MIN_TICKET, fundingApr, type Intent, type PinkyAsk } from './strategy';
 import { SPECIES } from './pets';
 import { leverage, liquidationDistance, type Personality, type PetState } from './pet-math';
 
@@ -103,6 +103,10 @@ const SCHEMA = {
     rationale: { type: 'string', description: "one or two sentences, in the pet's voice, naming what drove this" },
     cited: { type: 'array', items: { type: 'string' }, description: 'titles of the events you actually used' },
     confidence: { type: 'number', description: '0 to 1' },
+    thesis: { type: 'string', description: 'open/add only: your pinky promise — one falsifiable sentence, what you expect and why' },
+    target_price: { type: 'number', description: 'open/add only: the price above now that proves the thesis right' },
+    stop_price: { type: 'number', description: 'open/add only: the price below now that proves it wrong; the position is closed for you there' },
+    horizon_hours: { type: 'number', description: 'open/add only: hours the thesis has to play out, 1 to 336' },
   },
   required: ['action', 'rationale', 'cited', 'confidence'],
   additionalProperties: false,
@@ -150,6 +154,13 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
     '  hold    = do nothing',
     'If your read is bearish, the answer is trim, flatten or hold — never open or add.',
     '',
+    // The promise is what makes a buy auditable after the fact: a claim with a price that proves it
+    // right, a price that proves it wrong, and a deadline. Without the stop being enforced it would
+    // just be a forecast, and a pet could keep a broken thesis forever.
+    'Every open or add comes with a pinky promise: thesis (one falsifiable sentence: what you expect and why), target_price (above the current price; reaching it proves you right), stop_price (below the current price; trading there proves you wrong) and horizon_hours (how long it has to play out). ' + (pet.personality === 'diamond'
+      ? 'You never sell on price, so your stop is graded, not enforced: if the price trades there your diary says the thesis was wrong, and you hold anyway. Put it where the thesis breaks.'
+      : 'The stop is enforced: if the price trades there, the position is closed for you and your diary says the thesis was wrong. Put the stop where the thesis breaks, not where it merely stings. Once the target is reached, the stop moves up to your entry.'),
+    '',
     'Your mandate. These limits are enforced for you, automatically, whatever you answer. You never need to trade to satisfy one, and asking past one is wasted:',
     // Said as a fact, not a ceiling: told only "ceiling 2×", Diamond wrote "deploying $100 at 1×"
     // while the engine opened at 2× — a rationale that disagrees with its own execution.
@@ -170,7 +181,8 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
           `You hold ${qty.toFixed(4)} contracts from $${(pet.position?.entry ?? 0).toFixed(2)}: $${(qty * price).toFixed(2)} of exposure at ${lev.toFixed(1)}× (ceiling ${ceiling}×)${liqDist !== null ? `, liquidation ${liqDist.toFixed(1)}% below the price` : ''}.`,
           `Margin $${pet.margin.toFixed(2)}, of which $${deployed.toFixed(2)} backs the position. Room to add: ${room >= MIN_TICKET ? `$${room.toFixed(2)}` : 'none — an add would be refused'}.`,
         ].join('\n')
-      : `You hold nothing. You have $${pet.margin.toFixed(2)} of margin, and up to $${room.toFixed(2)} of it may go into a position.`,
+      : `You hold nothing. You have ${pet.margin.toFixed(2)} of margin, and up to ${room.toFixed(2)} of it may go into a position.`,
+    pet.position?.pinky ? promiseLine(pet.position.pinky) : '',
     breached.length
       ? `Limit breached, and being enforced for you this hour: ${breached.join('; ')}.`
       : 'Every limit in your mandate is satisfied right now.',
@@ -186,15 +198,31 @@ function prompt(pet: PetState, price: number, fundingRate: number, events: Sense
   return { system, user };
 }
 
+const day = (t: number) => new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+const promiseLine = (p: NonNullable<NonNullable<PetState['position']>['pinky']>) =>
+  `Your pinky promise from ${day(p.ts)}: "${p.thesis}" — target $${p.target.toFixed(2)}, stop $${p.stop.toFixed(2)}${p.hit ? ' (target reached, so the stop now sits at your entry)' : ''}, until ${day(p.until)}.`;
+
+/**
+ * The promise as the engine will hold it, or nothing. One that could not be graded is not a promise:
+ * the stop has to sit below the price and the target above it, and neither absurdly far away.
+ */
+export function pinkyOf(raw: Record<string, unknown>, price: number): PinkyAsk | undefined {
+  const thesis = String(raw.thesis ?? '').trim();
+  const target = Number(raw.target_price), stop = Number(raw.stop_price);
+  if (!thesis || !(stop < price && stop > price * 0.5) || !(target > price && target < price * 2)) return undefined;
+  const hours = Math.min(336, Math.max(1, Math.round(Number(raw.horizon_hours) || 72)));
+  return { thesis: thesis.slice(0, 280), target, stop, hours };
+}
+
 /** Coerce the model's answer into the engine's own Intent shape. */
-function toIntent(raw: Record<string, unknown>, pet: PetState): Intent | null {
+function toIntent(raw: Record<string, unknown>, pet: PetState, price: number): Intent | null {
   const reason = String(raw.rationale ?? '').trim();
   if (!reason) return null;
   const usd = Number(raw.size_usd);
   const m = MANDATES[pet.personality];
   switch (raw.action) {
-    case 'open':    return { kind: 'open', usd: Number.isFinite(usd) && usd > 0 ? usd : pet.margin, lever: m.maxLever, reason };
-    case 'add':     return { kind: 'add', usd: Number.isFinite(usd) && usd > 0 ? usd : pet.margin, reason };
+    case 'open':    return { kind: 'open', usd: Number.isFinite(usd) && usd > 0 ? usd : pet.margin, lever: m.maxLever, reason, pinky: pinkyOf(raw, price) };
+    case 'add':     return { kind: 'add', usd: Number.isFinite(usd) && usd > 0 ? usd : pet.margin, reason, pinky: pinkyOf(raw, price) };
     case 'trim':    return { kind: 'trim', fraction: Math.min(0.95, Math.max(0.05, Number(raw.fraction) || 0.5)), reason };
     case 'flatten': return { kind: 'flatten', reason };
     case 'hold':    return { kind: 'hold', reason };
@@ -228,7 +256,7 @@ function openaiBody(p: Provider, model: string, system: string, user: string, mo
     model,
     max_tokens: MAX_TOKENS,
     messages: [
-      { role: 'system', content: mode === 'plain' ? `${system}\n\nReply with ONLY a JSON object matching: {"action": "open|add|trim|flatten|hold", "size_usd": number, "fraction": number, "rationale": string, "cited": string[], "confidence": number}. No prose, no markdown fence.` : system },
+      { role: 'system', content: mode === 'plain' ? `${system}\n\nReply with ONLY a JSON object matching: {"action": "open|add|trim|flatten|hold", "size_usd": number, "fraction": number, "rationale": string, "cited": string[], "confidence": number, "thesis": string, "target_price": number, "stop_price": number, "horizon_hours": number}. No prose, no markdown fence.` : system },
       { role: 'user', content: user },
     ],
   };
@@ -395,7 +423,7 @@ export async function judge(opts: {
   if (!answered) return null;
   const { data: raw, model } = answered;
 
-  const intent = toIntent(raw, opts.pet);
+  const intent = toIntent(raw, opts.pet, opts.price);
   if (!intent) return null;
 
   return {

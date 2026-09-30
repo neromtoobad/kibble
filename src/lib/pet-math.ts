@@ -20,12 +20,12 @@ export type Personality = 'diamond' | 'degen' | 'boomer' | 'quant' | 'owl';
 // they are the event → decision → execution flow, in order, in one place.
 export type EntryKind =
   | 'feed' | 'open' | 'add' | 'trim' | 'flatten' | 'funding' | 'hold' | 'ask' | 'liquidated' | 'system'
-  | 'sensed' | 'decided' | 'vetoed';
+  | 'sensed' | 'decided' | 'vetoed' | 'promise';
 /**
  * Who made a diary line happen. The audit trail has to say whether the model chose it, the fixed
  * rules did, or one of the risk layers overruled both — otherwise "the risk layer works" is a claim.
  */
-export type Actor = 'model' | 'rules' | 'mandate' | 'storm' | 'weekend' | 'kennel' | 'kill' | 'market' | 'exchange' | 'owner';
+export type Actor = 'model' | 'rules' | 'mandate' | 'storm' | 'weekend' | 'kennel' | 'kill' | 'market' | 'exchange' | 'owner' | 'promise';
 
 export type Entry = {
   ts: number;
@@ -52,10 +52,28 @@ export type Entry = {
   prev?: string;
 };
 
+/**
+ * A pinky promise: the model's buy, made falsifiable. What it expects (the thesis and a target), where
+ * it is wrong (the stop), and by when. The stop is enforced — touch it and the pet is out — so every
+ * promise ends in one of four ways the diary records and the Proof page counts: the target was hit,
+ * the stop was, the deadline passed first, or something else closed the position before any of them.
+ */
+export type Pinky = {
+  ts: number;
+  thesis: string;
+  entry: number;    // the price it was made at
+  target: number;
+  stop: number;     // moves up to `entry` once the target is hit
+  until: number;
+  hit?: boolean;    // the target has been reached
+};
+export type PinkyOutcome = 'made' | 'target' | 'stopped' | 'expired' | 'closed';
+
 export type Position = {
   qty: number;      // contracts held (1 contract = 1 share of the underlying)
   entry: number;    // volume-weighted average entry price
   openedAt: number;
+  pinky?: Pinky;
 } | null;
 
 export type Proposal = { ts: number; usd: number; reason: string };

@@ -7,7 +7,7 @@ const ICON: Record<EntryKind, string> = {
   feed: '🍽', open: '📈', add: '➕', trim: '✂️', flatten: '⏹', funding: '💸', hold: '🤚',
   ask: '🙋', liquidated: '💀', system: '🔔',
   // The agent's own turn: what it read, what it chose, what the mandate did about it.
-  sensed: '📰', decided: '🧠', vetoed: '🛑',
+  sensed: '📰', decided: '🧠', vetoed: '🛑', promise: '🤙',
 };
 
 export default function Diary() {

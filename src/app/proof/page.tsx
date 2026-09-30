@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Nav } from '@/components/Nav';
 import { genesis, preimage, type ChainRow } from '@/lib/chain-core';
+import type { PromiseCard, PromiseLine } from '@/lib/proof';
 
 // Proof: everything this agent claims, in a form a judge can check in a couple of minutes. Every
 // number here is fetched from a public route and computed from the agent's own diary — nothing is
@@ -14,8 +15,8 @@ type Agent = {
 type Metrics = { totals: Record<string, number>; agents: Agent[] };
 type Intervention = { ts: number; by: string; kind: string; text: string; qty: number; price: number; later: number; pending: boolean; saved: number; funding: number };
 type Twin = { since: string; startEquity: number; live: { returnPct: number; sharpe: number | null; maxDrawdownPct: number | null }; twin: { returnPct: number; sharpe: number | null; maxDrawdownPct: number | null; trades: number }; addedPct: number };
-type ProofAgent = { agent: string; instrument: string; personality: string; guardian: null | { interventions: number; settled: number; saved: number; helped: number; hurt: number; byLayer: Record<string, { count: number; saved: number }>; recent: Intervention[] }; twin: Twin | null };
-type Proof = { note: string; totals: { interventions: number; settled: number; saved: number; helped: number; hurt: number; twinAddedPctAvg: number | null }; agents: ProofAgent[] };
+type ProofAgent = { agent: string; instrument: string; personality: string; guardian: null | { interventions: number; settled: number; saved: number; helped: number; hurt: number; byLayer: Record<string, { count: number; saved: number }>; recent: Intervention[] }; twin: Twin | null; promises: PromiseCard };
+type Proof = { note: string; totals: { interventions: number; settled: number; saved: number; helped: number; hurt: number; twinAddedPctAvg: number | null; promises?: Omit<PromiseCard, 'rewardRisk' | 'recent'> }; agents: ProofAgent[] };
 type Kennel = { pets: string[]; halted: boolean; status: null | { breaker: string; equity: number; dayChangePct: number | null; drawdownPct: number; exposure: number; reason: string | null } };
 type ChainPet = { petId: string; name: string; length: number; head: string | null; orphans: number; rows: Array<Omit<ChainRow, 'petId'> & { hash: string; prev: string }> };
 type LogRow = { timestamp: string; agent: string; action: string; direction: string | null; price: number | null; quantity: number | null; execution: string; order_id: string | null; fill_price: number | null; by: string | null; meta?: Record<string, unknown>; note: string };
@@ -24,6 +25,10 @@ const money = (v: number) => `${v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
 const pct = (v: number | null | undefined, dp = 2) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(dp)}%`);
 const tone = (v: number | null | undefined) => (v === null || v === undefined || v === 0 ? undefined : v > 0 ? 'var(--up)' : 'var(--down)');
 const when = (t: number | string) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const ENDING: Record<PromiseLine['outcome'], { label: string; color?: string }> = {
+  target: { label: 'right', color: 'var(--up)' }, stopped: { label: 'wrong', color: 'var(--down)' },
+  expired: { label: 'ran out' }, closed: { label: 'closed early' }, open: { label: 'open' },
+};
 const get = <T,>(url: string): Promise<T | null> => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 async function sha256(s: string) {
@@ -164,6 +169,37 @@ export default function ProofPage() {
             <span key="ld" className="num">{a.twin!.live.maxDrawdownPct?.toFixed(1) ?? '—'}%</span>,
             <span key="td" className="num">{a.twin!.twin.maxDrawdownPct?.toFixed(1) ?? '—'}%</span>,
             <span key="s" className="num">{a.twin!.since.slice(0, 10)}</span>])} />
+      </Section>
+
+      <Section title="Pinky promises"
+        sub="Every buy the model makes comes with a thesis, a target that would prove it right, a stop that would prove it wrong — enforced, except for Diamond Hands, which never sells on price — and a deadline. Each is graded by whichever comes first, from rows in the hash-chained diary, so the record cannot be tidied afterwards.">
+        {(() => {
+          const p = g?.promises;
+          const rr = (proof?.agents ?? []).map((a) => a.promises?.rewardRisk).filter((x): x is number => typeof x === 'number');
+          const lines = (proof?.agents ?? []).flatMap((a) => (a.promises?.recent ?? []).map((x) => ({ a, x }))).sort((m, n) => n.x.ts - m.x.ts).slice(0, 12);
+          return (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Stat v={p?.made ?? '—'} k="promises made" />
+                <Stat v={p?.hitRate == null ? '—' : `${Math.round(p.hitRate * 100)}%`} k="right, of those resolved" />
+                <Stat v={p ? `${p.target} / ${p.stopped} / ${p.expired}` : '—'} k="right / wrong / ran out" />
+                <Stat v={rr.length ? `${(rr.reduce((s, x) => s + x, 0) / rr.length).toFixed(2)} : 1` : '—'} k="reward promised per unit of risk" />
+              </div>
+              <div className="mt-3">
+                {lines.length ? (
+                  <Table head={['Made', 'Agent', 'Thesis', 'Entry → target / stop', 'Deadline', 'Ending']}
+                    rows={lines.map(({ a, x }) => [<span key="w" className="num">{when(x.ts)}</span>, a.agent,
+                      <span key="t" className="text-[12.5px]">{x.thesis}</span>,
+                      <span key="p" className="num">{x.entry.toFixed(2)} → {x.target.toFixed(2)} / {x.stop.toFixed(2)}</span>,
+                      <span key="d" className="num">{when(x.until)}</span>,
+                      <span key="e" className="num font-semibold" style={{ color: ENDING[x.outcome].color }}>{ENDING[x.outcome].label}{x.at != null && x.outcome !== 'open' ? ` @ ${x.at.toFixed(2)}` : ''}</span>])} />
+                ) : (
+                  <p className="card px-4 py-3 text-[13px]" style={{ color: 'var(--muted)' }}>No promises yet. Promises started on 30 Sep; the first is written the next time a model decides to buy.</p>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </Section>
 
       <Section title="The kennel breaker" sub="Each owner's pets together: 3% down on the day stops new risk until tomorrow; 8% below the high-water mark cuts every pet to 1× for up to 24 hours; total exposure is capped at 3× equity; and the owner can pull a kill switch.">

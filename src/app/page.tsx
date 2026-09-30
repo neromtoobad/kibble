@@ -8,6 +8,7 @@ import { Nav } from '@/components/Nav';
 import { Confetti } from '@/components/Confetti';
 import { Report, Ask } from '@/components/Report';
 import { Sparkline } from '@/components/Sparkline';
+import { PromiseCard } from '@/components/PromiseCard';
 import { DuelCard, type Duel } from '@/components/Duel';
 import { SPECIES, type Mood } from '@/lib/pets';
 import { computeMood, moodLine } from '@/lib/mood';
@@ -196,6 +197,8 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {pet?.position?.pinky && <PromiseCard pinky={pet.position.pinky} price={price.price} now={now || null} />}
 
       {pet && <Ask pet={pet} price={price.price} onAnswer={(yes) => { if (price.price) void syncPet(answerProposal(pet, yes, price.price)); }} />}
 

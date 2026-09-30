@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbEnabled, ensureSchema, pool } from '@/lib/db';
 import { fetchBars } from '@/lib/bars';
-import { guardianLedger, ghostTwin, HORIZON_H } from '@/lib/proof';
+import { guardianLedger, ghostTwin, promiseCard, HORIZON_H } from '@/lib/proof';
 import { SPECIES, type Species } from '@/lib/pets';
 import type { EntryKind, Personality } from '@/lib/pet-math';
 
@@ -11,6 +11,7 @@ import type { EntryKind, Personality } from '@/lib/pet-math';
 //   guardian  every time a risk layer overruled a pet, what the ignored trade would have made or lost
 //             over the next 24 hours, funding included — what the risk layer was worth, in dollars
 //   twin      each pet against a fixed-rule copy of itself on the same bars — what the model added
+//   promises  every thesis the model bought on, graded by how it ended — was the model right
 //
 // Cached for five minutes: it replays every pet and fetches every tape.
 
@@ -32,7 +33,7 @@ export async function GET() {
     const entries = await pool().query<EntryRow>(
       `select pet_id, ts, kind, body, qty, price, by_actor, meta
          from pet_entries where kind = any($1) order by ts asc`,
-      [['trim', 'flatten', 'vetoed', 'open', 'add']],
+      [['trim', 'flatten', 'vetoed', 'open', 'add', 'promise']],
     );
     const tapes = new Map<string, Awaited<ReturnType<typeof fetchBars>>>();
     for (const sp of new Set(pets.rows.map((p) => p.species))) {
@@ -55,13 +56,14 @@ export async function GET() {
           recent: g.interventions.slice(-8).reverse(),
         },
         twin: t,
+        promises: promiseCard(rows),
       };
     });
 
     const settled = agents.flatMap((a) => (a.guardian ? [a.guardian] : []));
     const twins = agents.flatMap((a) => (a.twin ? [a.twin] : []));
     const body = {
-      note: `Guardian: each risk-layer intervention marked to market ${HORIZON_H}h later, funding included; saved = what ignoring it would have lost. Refusals from before shadow trades were recorded (30 Sep) are not scored, only cuts. Twin: the same pet on its fixed rules alone, replayed on the same bars from its first hourly mark; the live pet ran older code early on, so "added" is the model plus those changes, against today's rules.`,
+      note: `Guardian: each risk-layer intervention marked to market ${HORIZON_H}h later, funding included; saved = what ignoring it would have lost. Refusals from before shadow trades were recorded (30 Sep) are not scored, only cuts. Twin: the same pet on its fixed rules alone, replayed on the same bars from its first hourly mark; the live pet ran older code early on, so "added" is the model plus those changes, against today's rules. Promises: every model buy states a thesis, a target, a stop and a deadline, and is graded by whichever comes first; closed-early promises are counted but not scored.`,
       as_of: new Date().toISOString(),
       totals: {
         interventions: settled.reduce((s, g) => s + g.interventions, 0),
@@ -70,6 +72,12 @@ export async function GET() {
         helped: settled.reduce((s, g) => s + g.helped, 0),
         hurt: settled.reduce((s, g) => s + g.hurt, 0),
         twinAddedPctAvg: twins.length ? twins.reduce((s, t) => s + t.addedPct, 0) / twins.length : null,
+        promises: (() => {
+          const c = agents.map((a) => a.promises);
+          const sum = (k: 'made' | 'target' | 'stopped' | 'expired' | 'closed' | 'open') => c.reduce((s, x) => s + x[k], 0);
+          const resolved = sum('target') + sum('stopped') + sum('expired');
+          return { made: sum('made'), target: sum('target'), stopped: sum('stopped'), expired: sum('expired'), closed: sum('closed'), open: sum('open'), hitRate: resolved ? sum('target') / resolved : null };
+        })(),
       },
       agents,
     };

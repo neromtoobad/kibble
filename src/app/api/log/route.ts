@@ -27,7 +27,7 @@ import { SPECIES, type Species } from '@/lib/pets';
 export const dynamic = 'force-dynamic';
 
 const EXECUTIONS = ['open', 'add', 'trim', 'flatten', 'liquidated'];
-const REASONING = ['sensed', 'decided', 'vetoed', 'ask', 'hold', 'funding', 'system'];
+const REASONING = ['sensed', 'decided', 'vetoed', 'promise', 'ask', 'hold', 'funding', 'system'];
 
 const DIRECTION: Record<string, string> = {
   open: 'BUY', add: 'BUY',

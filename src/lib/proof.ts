@@ -131,3 +131,58 @@ export function ghostTwin(opts: {
     addedPct: pct(liveEq) - pct(twinEq),
   };
 }
+
+// ── pinky promises ──────────────────────────────────────────────────────
+//
+// Every model buy comes with a thesis, a target, a stop and a deadline (see Pinky in ./pet-math),
+// and the engine writes each ending to the hash-chained diary as it happens. So the scorecard is a
+// count of rows nobody can edit after the fact: how often the pet was right, how often wrong, how
+// often the market never decided, and what reward it was promising for the risk it named.
+
+export type PromiseOutcome = 'target' | 'stopped' | 'expired' | 'closed' | 'open';
+export type PromiseLine = {
+  ts: number; thesis: string; entry: number; target: number; stop: number; until: number;
+  outcome: PromiseOutcome; resolvedAt: number | null; at: number | null;
+};
+export type PromiseCard = {
+  made: number; target: number; stopped: number; expired: number; closed: number; open: number;
+  /** Right ÷ (right + wrong + ran out). Closed-early promises never resolved, so they are left out. */
+  hitRate: number | null;
+  /** Mean of (target − entry) ÷ (entry − stop) as promised: the reward the pet named per unit of risk. */
+  rewardRisk: number | null;
+  recent: PromiseLine[];
+};
+
+type Vow = { ts: number; thesis: string; entry: number; target: number; stop: number; until: number };
+
+export function promiseCard(rows: LedgerRow[], now = Date.now()): PromiseCard {
+  const lines = new Map<number, PromiseLine>();
+  for (const r of [...rows].filter((r) => r.kind === 'promise').sort((a, b) => a.ts - b.ts)) {
+    const meta = r.meta as { outcome?: string; pinky?: Vow; at?: number } | undefined;
+    const p = meta?.pinky;
+    if (!p || typeof p.ts !== 'number') continue;
+    if (meta?.outcome === 'made') {
+      lines.set(p.ts, { ts: p.ts, thesis: p.thesis, entry: p.entry, target: p.target, stop: p.stop, until: p.until, outcome: 'open', resolvedAt: null, at: null });
+      continue;
+    }
+    const line = lines.get(p.ts);
+    // First ending wins: after a target, the stop at the entry closing the position is not a second verdict.
+    if (!line || line.outcome !== 'open') continue;
+    if (meta?.outcome === 'target' || meta?.outcome === 'stopped' || meta?.outcome === 'expired' || meta?.outcome === 'closed') {
+      line.outcome = meta.outcome;
+      line.resolvedAt = r.ts;
+      line.at = typeof meta.at === 'number' ? meta.at : null;
+    }
+  }
+  const all = [...lines.values()];
+  const n = (o: PromiseOutcome) => all.filter((l) => l.outcome === o).length;
+  const resolved = n('target') + n('stopped') + n('expired');
+  const rr = all.filter((l) => l.entry > l.stop).map((l) => (l.target - l.entry) / (l.entry - l.stop));
+  return {
+    made: all.length, target: n('target'), stopped: n('stopped'), expired: n('expired'), closed: n('closed'),
+    open: all.filter((l) => l.outcome === 'open' && l.until > now).length,
+    hitRate: resolved ? n('target') / resolved : null,
+    rewardRisk: rr.length ? rr.reduce((s, x) => s + x, 0) / rr.length : null,
+    recent: all.slice(-6).reverse(),
+  };
+}

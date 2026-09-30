@@ -18,7 +18,8 @@
     "risktest": "tsx scripts/risktest.ts",
     "chaintest": "tsx scripts/chaintest.ts",
     "verify": "tsx scripts/verify.ts",
-    "universetest": "tsx scripts/universetest.ts"
+    "universetest": "tsx scripts/universetest.ts",
+    "promisetest": "tsx scripts/promisetest.ts"
   },
   "dependencies": {
     "framer-motion": "^13.4.0",

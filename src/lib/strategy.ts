@@ -13,9 +13,12 @@ import type { Bar } from './bitget';
 // Those three are the risk-control layer, and they are why one pet faints and
 // another doesn't.
 
+/** What the model promises alongside a buy — see Pinky in ./pet-math. Only the model makes these. */
+export type PinkyAsk = { thesis: string; target: number; stop: number; hours: number };
+
 export type Intent =
-  | { kind: 'open'; usd: number; lever: number; reason: string }
-  | { kind: 'add'; usd: number; reason: string }
+  | { kind: 'open'; usd: number; lever: number; reason: string; pinky?: PinkyAsk }
+  | { kind: 'add'; usd: number; reason: string; pinky?: PinkyAsk }
   | { kind: 'trim'; fraction: number; reason: string; risk?: boolean }
   | { kind: 'flatten'; reason: string; risk?: boolean }
   | { kind: 'propose'; usd: number; reason: string }  // needs the owner's nod
@@ -152,8 +155,8 @@ export function gate(m: Mandate, s: StrategyState, proposed: Intent, speciesMaxL
     }
     const clamped = usd < want - 0.01 ? `Asked for $${want.toFixed(2)}, allowed $${usd.toFixed(2)} by the mandate.` : null;
     const intent: Intent = proposed.kind === 'open'
-      ? { kind: 'open', usd, lever: Math.min(proposed.lever, ceiling), reason: proposed.reason }
-      : { kind: 'add', usd, reason: proposed.reason };
+      ? { kind: 'open', usd, lever: Math.min(proposed.lever, ceiling), reason: proposed.reason, pinky: proposed.pinky }
+      : { kind: 'add', usd, reason: proposed.reason, pinky: proposed.pinky };
     return { intent, clamped, veto: null };
   }
 
