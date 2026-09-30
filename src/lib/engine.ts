@@ -117,6 +117,12 @@ export function runEngine(
     said.add(key);
     fresh.push({ ts: t, text, kind: 'vetoed', paper, by, meta });
   };
+  /**
+   * Margin the pet could actually commit right now, before its reserve — a shadow trade is only the
+   * part a risk rule stopped, never money the pet did not have. Without this cap a model asking for
+   * $196 on a $50 pet scored a $64 "missed gain" against the mandate.
+   */
+  const freeMargin = () => Math.max(0, margin - (qty * entry) / Math.max(Math.min(mandate.maxLever, sp.maxLever), 1));
   /** The trade a refusal or a clamp stopped — what the Guardian's ledger marks to market later. */
   const shadow = (usd: number, lever: number, price: number) => ({ shadow: { side: 'buy', usd, lever, price, qty: (usd * lever) / price } });
   let room = guard.exposureRoom;
@@ -251,10 +257,10 @@ export function runEngine(
       const askedLever = asked.kind === 'open' ? asked.lever : mandate.maxLever;
       if (g.veto) {
         fresh.push({ ts: bar.t, text: g.veto, kind: 'vetoed', paper, by: 'mandate',
-          meta: asked.kind === 'open' || asked.kind === 'add' ? shadow(asked.usd, Math.min(askedLever, mandate.maxLever), bar.close) : { wanted: asked.kind } });
+          meta: asked.kind === 'open' || asked.kind === 'add' ? shadow(Math.min(asked.usd, freeMargin()), Math.min(askedLever, mandate.maxLever), bar.close) : { wanted: asked.kind } });
       } else if (g.clamped && (asked.kind === 'open' || asked.kind === 'add') && (g.intent.kind === 'open' || g.intent.kind === 'add')) {
         fresh.push({ ts: bar.t, text: g.clamped, kind: 'vetoed', paper, by: 'mandate',
-          meta: shadow(Math.max(0, asked.usd - g.intent.usd), g.intent.kind === 'open' ? g.intent.lever : mandate.maxLever, bar.close) });
+          meta: shadow(Math.max(0, Math.min(asked.usd, freeMargin()) - g.intent.usd), g.intent.kind === 'open' ? g.intent.lever : mandate.maxLever, bar.close) });
       }
       intent = g.intent;
     } else {
@@ -265,7 +271,7 @@ export function runEngine(
     if (intent.kind === 'open' || intent.kind === 'add') {
       if (guard.noNewRisk) {
         once('kennel', bar.t, `Wanted to ${intent.kind}, refused: ${guard.noNewRisk}`, guard.halt ? 'kill' : 'kennel',
-          shadow(intent.usd, intent.kind === 'open' ? intent.lever : mandate.maxLever, bar.close));
+          shadow(Math.min(intent.usd, freeMargin()), intent.kind === 'open' ? intent.lever : mandate.maxLever, bar.close));
         continue;
       }
       // The reserve and the leverage ceiling bind the fixed rules exactly as gate() binds the
