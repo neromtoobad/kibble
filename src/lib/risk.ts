@@ -82,8 +82,11 @@ export const KENNEL = {
   /** This far below the kennel's peak: no new risk, and every pet is cut to 1×. The rest of the
    *  field in this track runs drawdowns under 7%; a kennel should not sit far past that. */
   drawdownPct: 8,
-  /** ...and it stays that way until the kennel is back within this distance of the peak. */
+  /** ...and it stays that way until the kennel is back within this distance of the peak... */
   resumePct: 5,
+  /** ...or for at most this long, after which it re-arms from where the kennel then stands. A
+   *  cooling-off period, not a sentence: without it a pet 25% under an old high never trades again. */
+  cooldownHours: 24,
   /** Total notional across the kennel may not exceed this multiple of its equity. */
   maxExposure: 3,
 } as const;
@@ -134,30 +137,44 @@ export function kennelCurve(markSets: Array<Array<[number, number]>>): Array<[nu
 }
 
 /**
+ * When the breaker went live. Equity before it is history the rule never governed, and measuring a
+ * drawdown against a peak from then tripped four of five pets on the first tick.
+ */
+export const RISK_EPOCH = Date.parse('2026-09-30T08:00:00Z');
+
+/**
  * The kennel's verdict for this tick, from its combined equity curve and current exposure.
- * Stateless: whether the drawdown breaker is still tripped is re-derived from the curve (trip at
- * 8% below peak, reset once back within 5%), so the worker holds no hidden state.
+ * Stateless: the drawdown breaker's state is re-derived from the curve every tick — trip at 8%
+ * below the high-water mark, release once back within 5% or after 24 hours, and on release the
+ * high-water mark restarts from there — so the worker holds no hidden state.
  */
 export function kennelGuard(
   markSets: Array<Array<[number, number]>>,
   notional: number,
   now: number,
   halted: string | null,
+  since = RISK_EPOCH,
 ): { guard: Guard; status: KennelStatus } {
-  const curve = kennelCurve(markSets);
+  const curve = kennelCurve(markSets).filter(([t]) => t >= since);
   const equity = curve.at(-1)?.[1] ?? 0;
   const dayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
   const startMark = curve.find(([t]) => t >= dayStart);
   const dayStartEquity = startMark ? startMark[1] : null;
   const dayChangePct = dayStartEquity && dayStartEquity > 0 ? ((equity - dayStartEquity) / dayStartEquity) * 100 : null;
 
-  let peak = 0, tripped = false, dd = 0;
-  for (const [, eq] of curve) {
+  const cooldown = KENNEL.cooldownHours * 3600e3;
+  let peak = 0, dd = 0, trippedAt: number | null = null;
+  for (const [t, eq] of curve) {
+    if (trippedAt !== null) {
+      const recovered = peak > 0 && ((peak - eq) / peak) * 100 < KENNEL.resumePct;
+      if (recovered || t >= trippedAt + cooldown) { trippedAt = null; if (!recovered) peak = eq; }
+    }
     peak = Math.max(peak, eq);
     dd = peak > 0 ? ((peak - eq) / peak) * 100 : 0;
-    if (dd >= KENNEL.drawdownPct) tripped = true;
-    else if (tripped && dd < KENNEL.resumePct) tripped = false;
+    if (trippedAt === null && dd >= KENNEL.drawdownPct) trippedAt = t;
   }
+  if (trippedAt !== null && now >= trippedAt + cooldown) trippedAt = null;
+  const tripped = trippedAt !== null;
   const exposure = equity > 0 ? notional / equity : 0;
 
   const guard: Guard = { ...OPEN_GUARD };
@@ -171,7 +188,8 @@ export function kennelGuard(
     guard.noNewRisk = reason;
   } else if (tripped) {
     breaker = 'drawdown';
-    reason = `The kennel is ${dd.toFixed(1)}% below its peak (breaker at ${KENNEL.drawdownPct}%). Every pet is cut to 1× and takes no new risk until it is back within ${KENNEL.resumePct}%.`;
+    const until = new Date((trippedAt as number) + cooldown).toISOString().slice(0, 16).replace('T', ' ');
+    reason = `The kennel is ${dd.toFixed(1)}% below its high-water mark (breaker at ${KENNEL.drawdownPct}%). Every pet is cut to 1× and takes no new risk until it is back within ${KENNEL.resumePct}% or until ${until} UTC, whichever comes first.`;
     guard.noNewRisk = reason;
     guard.deleverTo = 1;
   } else if (dayChangePct !== null && dayChangePct <= -KENNEL.dailyLossPct) {

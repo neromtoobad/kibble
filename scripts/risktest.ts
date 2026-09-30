@@ -106,7 +106,7 @@ const day0 = Date.parse('2026-09-26T00:00:00Z');
     [[day0 - H, 50], [day0, 50], [SAT_NOON, 48]],
     [[day0 - H, 50], [day0, 50], [SAT_NOON, 48]],
   ];
-  const { guard, status } = kennelGuard(marks, 100, SAT_NOON, null);
+  const { guard, status } = kennelGuard(marks, 100, SAT_NOON, null, 0);
   check(status.breaker === 'daily-loss' && Boolean(guard.noNewRisk), 'down 4% on the day trips the 3% daily limit', status.reason ?? '');
   const bars = tape(SAT_NOON, 48, (k) => (k % 2 ? 0.0005 : -0.0004));
   const r = runEngine(pet('owl', 0, 0, SAT_NOON), bars, [], SAT_NOON, null, guard);
@@ -114,10 +114,18 @@ const day0 = Date.parse('2026-09-26T00:00:00Z');
     'a pet that wants to open is refused, and the refusal is written down', r.fresh.find((e) => e.kind === 'vetoed')?.text ?? '');
 }
 {
-  const at = (eqs: number[]) => kennelGuard([eqs.map((e, k) => [day0 - (eqs.length - k) * 24 * H, e] as [number, number])], 0, SAT_NOON, null).status.breaker;
+  // Hourly marks ending at `now`: the breaker trips at 8% under the high-water mark, holds while
+  // still more than 5% under it, and releases on recovery or after 24 hours — whichever is first.
+  const at = (eqs: number[], now = SAT_NOON) => kennelGuard([eqs.map((e, k) => [now - (eqs.length - 1 - k) * H, e] as [number, number])], 0, now, null, 0).status.breaker;
   const seq = [at([100, 91]), at([100, 91, 94]), at([100, 91, 94, 96])];
-  check(seq[0] === 'drawdown' && seq[1] === 'drawdown' && seq[2] === 'armed', `the drawdown breaker trips at ${KENNEL.drawdownPct}% and resets only inside ${KENNEL.resumePct}%`,
+  // At 96 the drawdown breaker has released; on the same day the 3% daily-loss limit is what holds.
+  check(seq[0] === 'drawdown' && seq[1] === 'drawdown' && seq[2] !== 'drawdown', `the drawdown breaker trips at ${KENNEL.drawdownPct}% and holds until back within ${KENNEL.resumePct}%`,
     `100 → 91: ${seq[0]} · → 94: ${seq[1]} · → 96: ${seq[2]}`);
+  const stuck = [100, 91, ...Array(30).fill(91)];
+  check(at(stuck.slice(0, 20)) === 'drawdown' && at(stuck) === 'armed', `but not for longer than ${KENNEL.cooldownHours} hours — it re-arms from where it stands`,
+    `still 9% under after 18h: ${at(stuck.slice(0, 20))} · after 30h: ${at(stuck)}`);
+  const before = kennelGuard([[[SAT_NOON - 48 * H, 200], [SAT_NOON - H, 150], [SAT_NOON, 150]]], 0, SAT_NOON, null, SAT_NOON - 2 * H).status.breaker;
+  check(before === 'armed', 'equity from before the breaker went live does not count against it', `a 25% fall two days before the epoch → ${before}`);
 }
 {
   const bars = tape(WED_NOON_ET, 48, (k) => (k % 2 ? 0.001 : -0.0009));
