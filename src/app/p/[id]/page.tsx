@@ -37,7 +37,9 @@ export default async function PetPage({ params }: Props) {
   const c = await loadCard(id).catch(() => null);
   if (!c) notFound();
   const tone = c.returnPct === null || c.returnPct === 0 ? undefined : c.returnPct > 0 ? 'var(--up)' : 'var(--down)';
-  const when = (t: number) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const date = (t: number) => `${new Date(t).getUTCDate()} ${MONTHS[new Date(t).getUTCMonth()]}`;
+  const when = (t: number) => `${date(t)}, ${new Date(t).toISOString().slice(11, 16)}`;
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))]">
@@ -53,7 +55,7 @@ export default async function PetPage({ params }: Props) {
       </p>
 
       <div className="card mt-4 px-4 py-3">
-        <p className="text-[11.5px]" style={{ color: 'var(--muted)' }}>Return{c.since ? ` since ${when(c.since).split(',')[0]}` : ''}</p>
+        <p className="text-[11.5px]" style={{ color: 'var(--muted)' }}>Return{c.since ? ` since ${date(c.since)}` : ''}</p>
         <p className="text-[30px] font-bold num leading-tight" style={{ color: tone }}>{c.returnPct === null ? 'Just hatched' : pct(c.returnPct)}</p>
         <p className="mt-1 text-[12.5px] num" style={{ color: 'var(--muted)' }}>
           {[c.sharpe !== null ? `Sharpe ${c.sharpe.toFixed(2)}` : null, c.maxDrawdownPct !== null ? `max DD ${c.maxDrawdownPct.toFixed(1)}%` : null, `${c.closes} closes`, c.faints ? `fainted ${c.faints}×` : null].filter(Boolean).join(' · ')}
@@ -67,7 +69,7 @@ export default async function PetPage({ params }: Props) {
         <ul className="mt-2 grid gap-2">
           {c.recent.map((e) => (
             <li key={`${e.ts}-${e.kind}`} className="card px-4 py-2.5">
-              <p className="text-[13.5px] leading-snug">{e.text}</p>
+              <p className="line-clamp-4 text-[13.5px] leading-snug">{e.text}</p>
               <p className="mt-1 text-[11px] num" style={{ color: 'var(--muted)' }}>{e.kind} · {when(e.ts)} UTC</p>
             </li>
           ))}
