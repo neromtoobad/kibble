@@ -107,6 +107,9 @@ export function ghostTwin(opts: {
   const { bars } = opts;
   const last = bars.at(-1);
   if (!last) return null;
+  // A day of hourly marks is the least a comparison means anything over. A pet adopted this morning
+  // has no record yet, and scoring it at "+0.00" would only dilute the average of the ones that do.
+  if (opts.liveMarks.length < 24) return null;
   // The twin starts where the live record starts: the first hourly mark we have for the pet.
   const start = Math.max(opts.adoptedAt, opts.liveMarks[0]?.[0] ?? opts.adoptedAt, bars[0].t) - 1;
   const startEquity = opts.liveMarks.find(([t]) => t >= start)?.[1] ?? opts.startMargin;
