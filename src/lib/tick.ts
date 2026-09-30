@@ -239,7 +239,7 @@ async function write(id: string, pet: PetState, fresh: Entry[], cutover = false)
     const b = i * 16;
     values.push(id, new Date(e.ts).toISOString(), e.kind, e.text, e.qty ?? null, e.price ?? null, e.usd ?? null, e.sig ?? null, e.paper ?? true,
       e.exec ?? null, e.order ?? null, e.fill ?? null, e.by ?? null, e.meta ? JSON.stringify(e.meta) : null, e.hash ?? null, e.prev ?? null);
-    return `(${Array.from({ length: 16 }, (_, j) => `${b + j + 1}`).join(',')})`;
+    return `(${Array.from({ length: 16 }, (_, j) => `$${b + j + 1}`).join(',')})`;
   });
   // A row the browser synced first is overwritten with the worker's copy, so what is stored is
   // exactly what was hashed. The worker's windows never overlap, so it never rewrites its own rows.
