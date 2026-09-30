@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kibble · judge mirror</title>
+<meta name="description" content="An hourly snapshot of Kibble's live paper-trading log, metrics and risk breaker, published by GitHub Actions.">
+<style>
+  :root {
+    --bg: #f6f5ee; --card: #ffffff; --ink: #151515; --muted: #6b6f66; --line: #e4e3da;
+    --accent: #6f9e00; --up: #178f62; --down: #c7392f; --chip: #eef2e2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 32px 0 10px; }
+  p { margin: 6px 0; }
+  a { color: inherit; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .stat .v { font-size: 24px; font-weight: 650; }
+  .stat .k { font-size: 12.5px; color: var(--muted); }
+  .chip { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-size: 12px; }
+  .chip.bad { background: #fbe4e1; color: var(--down); }
+  .chip.demo { background: #e3f1ff; color: #1d5fa8; }
+  .wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: #fbfbf7; }
+  tr:last-child td { border-bottom: 0; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .note { font-size: 13px; max-width: 420px; }
+  .links a { display: inline-block; margin: 4px 10px 4px 0; }
+  .banner { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: #fffbe6; border: 1px solid #efe3a8; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kibble · judge mirror</h1>
+  <p class="muted">A snapshot of the live app, taken every hour by GitHub Actions. The live app at
+    <a href="https://app-production-98c2.up.railway.app">app-production-98c2.up.railway.app</a> is the source of truth; this copy
+    exists so the evidence stays readable if it is ever unreachable.</p>
+  <p class="num muted" id="when">Loading…</p>
+  <div class="banner" id="failed" hidden>A file of this snapshot did not load. The raw files are linked at the bottom of the page.</div>
+
+  <h2>Across all agents</h2>
+  <div class="grid" id="totals"></div>
+
+  <h2>Kennel breaker</h2>
+  <div class="grid" id="kennels"></div>
+
+  <h2>Per agent — computed from each agent's hourly equity marks</h2>
+  <div class="wrap"><table id="agents"></table></div>
+
+  <h2>Latest trades</h2>
+  <div class="wrap"><table id="trades"></table></div>
+
+  <h2>Raw files in this snapshot</h2>
+  <p class="links num">
+    <a href="log.json">log.json</a> <a href="log-full.json">log-full.json</a> <a href="log.csv">log.csv</a>
+    <a href="metrics.json">metrics.json</a> <a href="kennel.json">kennel.json</a> <a href="snapshot.txt">snapshot.txt</a>
+  </p>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pct = (v, dp = 2) => v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(dp)}%`;
+const cls = (v) => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const load = (f) => fetch(f, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(f); return f.endsWith('.txt') ? r.text() : r.json(); })
+  .catch(() => { $('failed').hidden = false; return null; });
+
+Promise.all([load('snapshot.txt'), load('metrics.json'), load('log.json'), load('kennel.json'), load('log-full.json')]).then(([when, m, log, kennel, full]) => {
+  $('when').textContent = when ? `Snapshot ${when.trim()}` : 'Snapshot time unknown';
+  const rows = log?.log ?? [];
+  // Counted over the full log: the cutover itself is a system row carrying its own Bitget order.
+  const demo = (full?.log ?? []).filter((r) => r.execution === 'demo').length;
+  const t = m?.totals ?? {};
+  const vetoRate = t.decisions ? (t.vetoed_or_clamped / t.decisions) * 100 : null;
+  const stats = [
+    ['agents', t.agents], ['trades in the log', log?.rows], ['rows on Bitget demo', demo], ['model decisions', t.decisions],
+    ['vetoed or clamped', `${t.vetoed_or_clamped ?? '—'}${vetoRate !== null ? ` (${vetoRate.toFixed(0)}%)` : ''}`],
+    ['funding payments', t.funding_payments], ['faints', t.faints],
+    ['log runs', log?.from ? `${log.from.slice(5, 10)} → ${log.to?.slice(5, 10)}` : '—'],
+  ];
+  $('totals').innerHTML = stats.map(([k, v]) => `<div class="card stat"><div class="v num">${esc(v ?? '—')}</div><div class="k">${esc(k)}</div></div>`).join('');
+
+  const ks = kennel?.kennels ?? [];
+  $('kennels').innerHTML = ks.length ? ks.map((k) => {
+    const s = k.status ?? {};
+    const tripped = s.breaker && s.breaker !== 'armed';
+    return `<div class="card"><p><span class="chip ${tripped ? 'bad' : ''}">${esc(s.breaker ?? 'no verdict yet')}</span></p>
+      <p class="num">equity $${Number(s.equity ?? 0).toFixed(2)} · today <span class="${cls(s.dayChangePct)}">${pct(s.dayChangePct)}</span></p>
+      <p class="num">drawdown ${Number(s.drawdownPct ?? 0).toFixed(2)}% · exposure ${Number(s.exposure ?? 0).toFixed(2)}×</p>
+      <p class="muted" style="font-size:13px">${esc((k.pets ?? []).join(', '))}</p>
+      ${s.reason ? `<p class="note">${esc(s.reason)}</p>` : ''}</div>`;
+  }).join('') : '<p class="muted">No kennel verdicts in this snapshot.</p>';
+
+  const agents = m?.agents ?? [];
+  $('agents').innerHTML = `<tr><th>Agent</th><th>Contract</th><th>Mandate</th><th>Return</th><th>Sharpe</th><th>Max DD</th><th>Win rate</th><th>Closes</th><th>Decisions</th><th>Vetoed</th><th>Since</th></tr>` +
+    agents.map((a) => `<tr><td>${esc(a.agent)}</td><td class="num">${esc(a.instrument)}</td><td>${esc(a.personality)}</td>
+      <td class="num ${cls(a.return_pct)}">${pct(a.return_pct)}</td><td class="num">${a.sharpe ?? '—'}</td><td class="num">${a.max_drawdown_pct ?? '—'}%</td>
+      <td class="num">${a.win_rate === null ? '—' : `${Math.round(a.win_rate * 100)}%`}</td><td class="num">${a.closes}</td><td class="num">${a.decisions}</td>
+      <td class="num">${a.vetoed_or_clamped}</td><td class="num muted">${esc((a.since ?? '').slice(0, 10))}</td></tr>`).join('');
+
+  const recent = rows.slice(-40).reverse();
+  $('trades').innerHTML = `<tr><th>Time (UTC)</th><th>Agent</th><th>Action</th><th>Price</th><th>Fill</th><th>Execution</th><th>Why</th></tr>` +
+    recent.map((r) => `<tr><td class="num">${esc(r.timestamp.slice(0, 16).replace('T', ' '))}</td><td>${esc(r.agent)}</td>
+      <td>${esc(r.direction ?? '')} <span class="muted">${esc(r.action)}</span></td><td class="num">${r.price ? Number(r.price).toFixed(2) : '—'}</td>
+      <td class="num">${r.fill_price ? Number(r.fill_price).toFixed(2) : '—'}</td>
+      <td>${r.execution === 'demo' ? `<span class="chip demo">Bitget demo</span><br><span class="num muted" style="font-size:11px">${esc(r.order_id ?? '')}</span>` : '<span class="chip">sim</span>'}</td>
+      <td class="note">${esc(r.note)}</td></tr>`).join('');
+});
+</script>
+</body>
+</html>

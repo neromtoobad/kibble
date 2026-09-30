@@ -9,7 +9,7 @@ import { DuelCard, type Duel } from '@/components/Duel';
 
 type Row = {
   id: string; name: string; species: Species['id']; ticker: string; personality: Personality;
-  streak: number; paper: boolean; isPublic: boolean;
+  streak: number; paper: boolean; execution?: string; isPublic: boolean;
   qty: number; basis: number; value: number | null; price: number | null;
   pnlAbs: number | null; pnlPct: number | null; lever: number; faints: number; fundingPaid: number; margin: number;
 };
@@ -107,7 +107,7 @@ export default function Board() {
                 </p>
                 <p className="text-[11.5px] num" style={{ color: 'var(--muted)' }}>
                   {PERSONALITIES[r.personality]?.icon} {r.ticker} · day {r.streak}
-                  {r.lever > 1 && ` · ${r.lever.toFixed(1)}×`}{r.faints > 0 && ` · ${r.faints} faint${r.faints > 1 ? 's' : ''}`}{r.isPublic && ' · published'}{r.paper && ' · paper'}
+                  {r.lever > 1 && ` · ${r.lever.toFixed(1)}×`}{r.faints > 0 && ` · ${r.faints} faint${r.faints > 1 ? 's' : ''}`}{r.isPublic && ' · published'}{r.execution === 'demo' ? ' · on Bitget demo' : r.paper && ' · paper'}
                 </p>
               </div>
               <div className="shrink-0 text-right">

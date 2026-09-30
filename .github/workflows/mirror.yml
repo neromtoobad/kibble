@@ -1,0 +1,54 @@
+# The judge mirror.
+#
+# Once an hour, GitHub snapshots the live paper log, the metrics and the kennel breaker from the
+# Railway app and publishes them, with a small viewer, to GitHub Pages. The live app stays the
+# source of truth; this exists so the evidence is still readable if the app is ever unreachable
+# while someone is judging it. If a snapshot fails, nothing is deployed and the last good one stays.
+
+name: mirror
+
+on:
+  schedule:
+    - cron: '20 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [mirror/**, .github/workflows/mirror.yml]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot the live app
+        env:
+          APP: https://app-production-98c2.up.railway.app
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          cp mirror/index.html site/
+          get() { curl -fsS --retry 4 --retry-delay 15 --max-time 60 "$APP$1" -o "site/$2"; }
+          get /api/log log.json
+          get "/api/log?full=1" log-full.json
+          get "/api/log?format=csv" log.csv
+          get /api/metrics metrics.json
+          get /api/kennel kennel.json
+          date -u +%Y-%m-%dT%H:%M:%SZ > site/snapshot.txt
+          ls -la site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

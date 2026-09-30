@@ -13,10 +13,10 @@ export async function GET() {
     await ensureSchema();
     const { rows } = await pool().query<{
       id: string; name: string; species: string; ticker: string; personality: string;
-      streak: number; paper: boolean; is_public: boolean;
+      streak: number; paper: boolean; is_public: boolean; execution: string;
       qty: string; entry: string; margin: string; realized: string; funding_paid: string; faints: number;
     }>(
-      `select p.id, p.name, p.species, p.ticker, p.personality, p.streak, p.paper,
+      `select p.id, p.name, p.species, p.ticker, p.personality, p.streak, p.paper, p.execution,
               (p.published is not null) as is_public,
               coalesce((p.position->>'qty')::numeric, 0)   as qty,
               coalesce((p.position->>'entry')::numeric, 0) as entry,
@@ -53,7 +53,7 @@ export async function GET() {
         const value = px ? margin + unreal : null;
         return {
           id: r.id, name: r.name, species: r.species, ticker: r.ticker, personality: r.personality,
-          streak: r.streak, paper: r.paper, isPublic: r.is_public,
+          streak: r.streak, paper: r.paper, execution: r.execution, isPublic: r.is_public,
           qty, basis, value, price: px, margin,
           lever: px && value ? (qty * px) / value : 0,
           fundingPaid: Number(r.funding_paid) || 0,
