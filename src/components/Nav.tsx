@@ -1,21 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { TABS, isWide } from './Shell';
 
-const TABS = [
-  { href: '/', label: 'Pet', icon: '🐾' },
-  { href: '/shelf', label: 'Shelf', icon: '🧸' },
-  { href: '/duels', label: 'Board', icon: '🏆' },
-  { href: '/diary', label: 'Diary', icon: '📓' },
-  // For anyone checking the claims: scores, what the risk layer was worth, the model against its
-  // own fixed-rule twin, and the hash chain verified in the browser.
-  { href: '/proof', label: 'Proof', icon: '🔎' },
-];
-
+// The phone's tab bar. On a wide screen the desk beside the pet carries the same tabs, so the bar
+// steps aside there — except on pages wide enough to have no desk.
 export function Nav() {
   const path = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-[430px] justify-around border-t px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 text-[12px] font-semibold"
+    <nav className={`fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-[430px] justify-around border-t px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 text-[12px] font-semibold ${isWide(path) ? '' : 'lg:hidden'}`}
       style={{ background: 'var(--canvas)', borderColor: 'var(--line)', color: 'var(--muted)' }}>
       {TABS.map((t) => {
         const active = t.href === '/' ? path === '/' : path.startsWith(t.href);

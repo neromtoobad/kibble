@@ -4,6 +4,7 @@ import './globals.css';
 import './tokens.css';
 import { isNight, nyseSession } from '@/lib/session';
 import { SessionTheme } from '@/components/SessionTheme';
+import { Shell } from '@/components/Shell';
 
 // The theme is the market's session, so it cannot be decided at build time: prerendered, every
 // page but home kept whatever the NYSE was doing when the deploy ran.
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const session = isNight(nyseSession()) ? 'night' : 'day';
   return (
     <html lang="en" data-session={session} className={`${display.variable} ${body.variable} ${mono.variable}`}>
-      <body className="min-h-dvh antialiased"><SessionTheme />{children}</body>
+      <body className="min-h-dvh antialiased"><SessionTheme /><Shell>{children}</Shell></body>
     </html>
   );
 }

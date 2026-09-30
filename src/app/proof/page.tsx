@@ -51,9 +51,9 @@ async function verifyChains(pets: ChainPet[]) {
   return out;
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function Section({ id, title, sub, children }: { id?: string; title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className="mt-8">
+    <section id={id} className="mt-8 scroll-mt-4">
       <h2 className="text-[20px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>{title}</h2>
       {sub && <p className="mt-1 max-w-[720px] text-[13.5px]" style={{ color: 'var(--muted)' }}>{sub}</p>}
       <div className="mt-3">{children}</div>
@@ -126,7 +126,7 @@ export default function ProofPage() {
         Bitget tape by a public route — nothing here is typed in — and the diary&apos;s hash chain is verified by your browser, not taken on trust.
       </p>
 
-      <Section title="The score" sub="Paper trading since 20 Sep. Three agents execute on Bitget's demo exchange; two trade contracts demo does not list and are simulated at the bar close.">
+      <Section id="score" title="The score" sub="Paper trading since 20 Sep. Agents whose contract Bitget's demo exchange lists execute there, with real order ids; the rest are simulated at the bar close.">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat v={t?.agents ?? '—'} k="agents" />
           <Stat v={t?.trades ?? '—'} k="trades" />
@@ -142,7 +142,7 @@ export default function ProofPage() {
         </div>
       </Section>
 
-      <Section title="What the risk layer was worth"
+      <Section id="guardian" title="What the risk layer was worth"
         sub="Every time a risk layer overruled a pet — cut a position, or refused or shrank a buy — the trade that did not happen is marked to market 24 hours later, funding included. Saved is what ignoring it would have lost. It is allowed to come out negative, and sometimes does.">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat v={g ? money(g.saved) : '—'} k="saved, settled interventions" color={tone(g?.saved)} />
@@ -159,7 +159,7 @@ export default function ProofPage() {
         </div>
       </Section>
 
-      <Section title="The model against its own fixed-rule twin"
+      <Section id="twin" title="The model against its own fixed-rule twin"
         sub="Each pet replayed on its personality's fixed rules alone — same stock, starting equity and bars — from its first hourly mark. The gap is what the model's judgement added. The live pets ran older code in their first days, so this compares them with today's rules.">
         <Table head={['Agent', 'Live return', 'Twin return', 'Added', 'Live max DD', 'Twin max DD', 'Since']}
           rows={(proof?.agents ?? []).filter((a) => a.twin).map((a) => [a.agent,
@@ -171,7 +171,7 @@ export default function ProofPage() {
             <span key="s" className="num">{a.twin!.since.slice(0, 10)}</span>])} />
       </Section>
 
-      <Section title="Pinky promises"
+      <Section id="promises" title="Pinky promises"
         sub="Every buy the model makes comes with a thesis, a target that would prove it right, a stop that would prove it wrong — enforced, except for Diamond Hands, which never sells on price — and a deadline. Each is graded by whichever comes first, from rows in the hash-chained diary, so the record cannot be tidied afterwards.">
         {(() => {
           const p = g?.promises;
@@ -202,7 +202,7 @@ export default function ProofPage() {
         })()}
       </Section>
 
-      <Section title="The kennel breaker" sub="Each owner's pets together: 3% down on the day stops new risk until tomorrow; 8% below the high-water mark cuts every pet to 1× for up to 24 hours; total exposure is capped at 3× equity; and the owner can pull a kill switch.">
+      <Section id="kennel" title="The kennel breaker" sub="Each owner's pets together: 3% down on the day stops new risk until tomorrow; 8% below the high-water mark cuts every pet to 1× for up to 24 hours; total exposure is capped at 3× equity; and the owner can pull a kill switch.">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {(kennels ?? []).map((k, i) => (
             <div key={i} className="card px-4 py-3 text-[13px]">
@@ -214,7 +214,7 @@ export default function ProofPage() {
         </div>
       </Section>
 
-      <Section title="The diary is a hash chain" sub="Every row the worker writes carries sha256 of the previous row's hash and itself. Edit, drop or reorder one and every link after it fails. This button fetches the public rows and recomputes every link here, in your browser.">
+      <Section id="chain" title="The diary is a hash chain" sub="Every row the worker writes carries sha256 of the previous row's hash and itself. Edit, drop or reorder one and every link after it fails. This button fetches the public rows and recomputes every link here, in your browser.">
         <button onClick={runVerify} disabled={verifying} className="pill px-5 py-2.5 text-[15px] font-bold" style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}>
           {verifying ? 'Verifying…' : chain ? 'Verify again' : 'Verify the chain in this browser'}
         </button>
@@ -229,7 +229,7 @@ export default function ProofPage() {
         <p className="mt-2 text-[12.5px]" style={{ color: 'var(--muted)' }}>Or from a terminal: <span className="num">npm run verify</span>. The mirror at neromtoobad.github.io/kibble keeps an hourly copy.</p>
       </Section>
 
-      <Section title="Why did it do that?" sub="The last model decisions: what the pet read, what it chose and how sure it was, what its mandate did about it, and what the exchange filled.">
+      <Section id="inspector" title="Why did it do that?" sub="The last model decisions: what the pet read, what it chose and how sure it was, what its mandate did about it, and what the exchange filled.">
         <div className="grid gap-2">
           {decisions.map(({ r, sensed, after }, i) => {
             const m = (r.meta ?? {}) as { model?: string; confidence?: number; cited?: string[] };
