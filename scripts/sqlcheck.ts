@@ -51,6 +51,11 @@ const check = (file: string, table: string, col: string, what: string) => {
 };
 
 for (const file of files) {
+  // A generated VALUES tuple must emit $1, $2… — twice a template edit dropped the dollar sign,
+  // the insert became (1,2,3,…) and the worker crashed on its first write with nothing to catch it.
+  for (const m of readFileSync(file, 'utf8').matchAll(/\(_,\s*\w+\)\s*=>\s*`(\$?)\$\{/g)) {
+    if (!m[1]) problems.push(`${file}: a placeholder builder emits bare numbers — it needs a literal $ before \${…}`);
+  }
   const src = readFileSync(file, 'utf8');
 
   // insert into <table> (a, b, c)
