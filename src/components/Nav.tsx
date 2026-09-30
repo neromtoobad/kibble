@@ -7,6 +7,9 @@ const TABS = [
   { href: '/shelf', label: 'Shelf', icon: '🧸' },
   { href: '/duels', label: 'Board', icon: '🏆' },
   { href: '/diary', label: 'Diary', icon: '📓' },
+  // For anyone checking the claims: scores, what the risk layer was worth, the model against its
+  // own fixed-rule twin, and the hash chain verified in the browser.
+  { href: '/proof', label: 'Proof', icon: '🔎' },
 ];
 
 export function Nav() {
