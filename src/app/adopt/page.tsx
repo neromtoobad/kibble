@@ -6,7 +6,7 @@ import { Confetti } from '@/components/Confetti';
 import { SPECIES, eggImage, petImage, type Species } from '@/lib/pets';
 import { StockPicker } from '@/components/StockPicker';
 import { PERSONALITIES, adoptPetRemote, type Personality } from '@/lib/store';
-import { syncPet } from '@/lib/sync';
+import { forgetRemote, syncPet } from '@/lib/sync';
 
 // Finch's rule: egg → hatch → name → personality, inside the first minute, before any feature.
 type Step = 'egg' | 'hatch' | 'name';
@@ -29,6 +29,7 @@ export default function Adopt() {
   const adopt = () => {
     if (!pick || !name.trim()) return;
     router.push('/?hatched=1'); // optimistic — the local pet exists immediately; the agent attaches when the API answers
+    forgetRemote();
     void adoptPetRemote({ species: pick, name: name.trim().slice(0, 16), personality }).then(syncPet);
   };
 

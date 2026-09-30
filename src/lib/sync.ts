@@ -21,6 +21,15 @@ export function remoteId(): string | null {
   try { return localStorage.getItem(REMOTE_ID); } catch { return null; }
 }
 
+/**
+ * A new adoption is a new pet. Without this the first sync posted the old pet's id and the server
+ * dutifully overwrote that pet with the newcomer's name, personality and book. The owner key stays,
+ * so both pets answer to the same owner and the same kennel limits.
+ */
+export function forgetRemote() {
+  try { localStorage.removeItem(REMOTE_ID); } catch {}
+}
+
 let inFlight: Promise<void> | null = null;
 
 export function syncPet(pet: PetState, fresh: Entry[] = []): Promise<void> {
