@@ -28,7 +28,7 @@ export function StockPicker({ pick, onPick }: { pick: string | null; onPick: (id
     <div>
       <label className="card flex items-center gap-2 px-4 py-2.5">
         <span aria-hidden style={{ color: 'var(--muted)' }}>⌕</span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${SPECIES_LIST.length} stocks — ticker, company or animal`}
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${SPECIES_LIST.length} stocks or animals`} aria-label="Search by ticker, company or animal"
           className="w-full bg-transparent text-[15px] outline-none placeholder:text-[var(--muted)]" style={{ color: 'var(--ink)' }} />
         {query && <button onClick={() => setQuery('')} className="text-[13px] font-semibold" style={{ color: 'var(--muted)' }} aria-label="Clear search">✕</button>}
       </label>
@@ -49,13 +49,16 @@ export function StockPicker({ pick, onPick }: { pick: string | null; onPick: (id
         </p>
       )}
 
-      <ul className="mt-3 grid gap-2">
+      {/* A flex column, not a grid: a grid track grows to the widest row's min-content, and a
+          nowrap company name would widen every row past the screen instead of truncating. */}
+      <ul className="mt-3 flex flex-col gap-2">
         {list.map((s) => {
           const on = pick === s.id, tag = TAG[s.kind];
           return (
             <li key={s.id}>
               <button onClick={() => onPick(s.id)} className="card flex w-full items-center gap-3 px-3 py-2 text-left transition-transform active:scale-[0.99]"
-                style={{ outline: on ? '3px solid var(--accent)' : '3px solid transparent', boxShadow: on ? 'var(--glow)' : 'none' }} aria-pressed={on}>
+                style={{ outline: on ? '3px solid var(--accent)' : '3px solid transparent', boxShadow: on ? 'var(--glow)' : 'none' }} aria-pressed={on}
+                aria-label={`${s.ticker}, ${s.company}${tag ? `, ${tag}` : ''} — hatches a ${s.species.toLowerCase()}`}>
                 <img src={eggImage(s.id)} alt="" className="h-12 w-10 shrink-0 object-contain" draggable={false} loading="lazy" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
