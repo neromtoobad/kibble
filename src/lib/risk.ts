@@ -154,9 +154,16 @@ export function kennelGuard(
   now: number,
   halted: string | null,
   since = RISK_EPOCH,
+  /**
+   * Equity right now — margin plus open P&L at the last close, summed over the kennel. The hourly
+   * curve is the right thing to measure a drawdown or a day against, but it lags: a pet adopted
+   * mid-hour has no mark until its first bar, and a feed does not show until the next one. Sized on
+   * the curve alone, a newborn's exposure room was zero and its first buy was refused.
+   */
+  liveEquity?: number,
 ): { guard: Guard; status: KennelStatus } {
   const curve = kennelCurve(markSets).filter(([t]) => t >= since);
-  const equity = curve.at(-1)?.[1] ?? 0;
+  const equity = liveEquity ?? curve.at(-1)?.[1] ?? 0;
   const dayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
   const startMark = curve.find(([t]) => t >= dayStart);
   const dayStartEquity = startMark ? startMark[1] : null;

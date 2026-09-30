@@ -167,5 +167,12 @@ console.log('\n═══ determinism ═══\n');
   check(JSON.stringify(a.fresh) === JSON.stringify(b.fresh), 'the same tape and the same guard write the same diary', `${a.fresh.length} entries, identical`);
 }
 
+{
+  // A pet adopted mid-hour has no hourly mark yet. Its kennel must still see the margin it was fed.
+  const newborn = kennelGuard([[]], 0, SAT_NOON, null, undefined, 50);
+  check(newborn.guard.exposureRoom === KENNEL.maxExposure * 50 && newborn.status.breaker === 'armed',
+    'a newborn with no marks yet gets its full exposure room from live equity', `room $${newborn.guard.exposureRoom}`);
+}
+
 console.log(failed ? `\n${failed} FAILED\n` : '\nall checks passed\n');
 process.exit(failed ? 1 : 0);

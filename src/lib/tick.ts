@@ -90,7 +90,8 @@ export async function runTick(now = Date.now()): Promise<TickSummary> {
   for (const owner of new Set(rows.map((r) => r.owner_hash))) {
     const mine = rows.filter((r) => r.owner_hash === owner);
     const notional = mine.reduce((s, r) => s + notionalOf(r.position?.qty, r.species), 0);
-    const k = kennelGuard(mine.map((r) => r.marks ?? []), notional, now, halted.get(owner) ?? null);
+    const live = mine.reduce((s, r) => s + Number(r.margin) + (r.position?.qty ?? 0) * (lastClose(r.species) - (r.position?.entry ?? 0)), 0);
+    const k = kennelGuard(mine.map((r) => r.marks ?? []), notional, now, halted.get(owner) ?? null, undefined, live);
     kennels.set(owner, k);
     if (k.status.breaker !== 'armed') lines.push(`kennel of ${mine.length}: ${k.status.breaker} — ${k.status.reason}`);
   }
