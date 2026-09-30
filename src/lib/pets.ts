@@ -61,7 +61,4 @@ export const SPECIES: Record<Species['id'], Species> = {
 export const SPECIES_LIST = Object.values(SPECIES);
 export const bySymbol = (symbol: string) => SPECIES_LIST.find((s) => s.symbol === symbol) ?? null;
 
-export const petImage = (id: Species['id'], mood: Mood | 'hero') =>
-  // `fainted` reuses the sulking art — one fewer asset to generate, and a fainted pet
-  // sulking is right anyway.
-  `/pets/${id}/${mood === 'fainted' ? 'sulking' : mood}.png`;
+export const petImage = (id: Species['id'], mood: Mood | 'hero') => `/pets/${id}/${mood}.png`;

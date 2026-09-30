@@ -11,3 +11,6 @@ next-env.d.ts
 POST.md
 SUBMISSION.md
 PLAN.md
+
+# raw 896x1120 generator output (~120MB); scripts/import-art.mjs puts the web-sized frames in public/pets
+art-src/**/*.png
