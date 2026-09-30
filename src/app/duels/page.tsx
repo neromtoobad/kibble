@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Nav } from '@/components/Nav';
 import { PERSONALITIES, usePet, type Personality } from '@/lib/store';
@@ -103,7 +104,8 @@ export default function Board() {
               <img src={petImage(r.species, up ? 'happy' : 'sulking')} alt="" className="h-11 w-11 shrink-0 object-contain" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-                  {r.name}{isMine && <span className="ml-1 text-[11px]" style={{ color: 'var(--accent)' }}>you</span>}
+                  {/* Every agent's public page: its promise, its diary, its card. */}
+                  <Link href={`/p/${r.id}`} className="underline-offset-2 hover:underline">{r.name}</Link>{isMine && <span className="ml-1 text-[11px]" style={{ color: 'var(--accent)' }}>you</span>}
                 </p>
                 <p className="text-[11.5px] num" style={{ color: 'var(--muted)' }}>
                   {PERSONALITIES[r.personality]?.icon} {r.ticker} · day {r.streak}

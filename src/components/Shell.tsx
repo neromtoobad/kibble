@@ -43,7 +43,7 @@ const PATH = [
   { href: '/adopt', title: `Adopt any of ${SPECIES_LIST.length}`, text: 'Every liquid Bitget stock perpetual, hatching the animal of its sector.' },
 ];
 
-type Board = { name: string; species: string; ticker: string; personality: string; execution: string | null; pnlPct: number | null; faints: number };
+type Board = { id: string; name: string; species: string; ticker: string; personality: string; execution: string | null; pnlPct: number | null; faints: number };
 type Feed = { ts: number; kind: string; text: string; by: string | null; agent: string; species: string; ticker: string; outcome: string | null };
 
 const ICON: Record<string, string> = { decided: '🧠', promise: '🤙', open: '📈', add: '➕', trim: '✂️', flatten: '⏹', vetoed: '🛑', liquidated: '💀' };
@@ -117,10 +117,10 @@ function Desk({ path }: { path: string }) {
         </div>
         <ul className="mt-2 grid gap-1.5">
           {(board ?? []).map((r) => (
-            <li key={r.name + r.ticker} className="flex items-center gap-2.5">
+            <li key={r.id} className="flex items-center gap-2.5">
               <img src={petImage(r.species, 'hero')} alt="" className="h-8 w-8 shrink-0 object-contain" loading="lazy" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px] font-semibold leading-tight">{r.name} <span className="num text-[11.5px] font-medium" style={{ color: 'var(--muted)' }}>{r.ticker}</span></span>
+                <span className="block truncate text-[13.5px] font-semibold leading-tight"><Link href={`/p/${r.id}`} className="hover:underline">{r.name}</Link> <span className="num text-[11.5px] font-medium" style={{ color: 'var(--muted)' }}>{r.ticker}</span></span>
                 <span className="block text-[11.5px] leading-tight" style={{ color: 'var(--muted)' }}>{r.personality}{r.execution === 'demo' ? ' · Bitget demo' : ' · simulated'}{r.faints ? ` · fainted ${r.faints}×` : ''}</span>
               </span>
               <span className="num text-[13px] font-semibold" style={{ color: r.pnlPct == null || r.pnlPct === 0 ? undefined : r.pnlPct > 0 ? 'var(--up)' : 'var(--down)' }}>
