@@ -16,7 +16,7 @@ const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500'], variable: '--
 
 export const metadata: Metadata = {
   // Share cards and unfurls need absolute URLs; relative ones in any page's metadata resolve against this.
-  metadataBase: new URL(process.env.PUBLIC_URL ?? 'https://app-production-98c2.up.railway.app'),
+  metadataBase: new URL(process.env.PUBLIC_URL ?? 'https://kibble.up.railway.app'),
   title: 'Kibble',
   description: 'Adopt a Stockling that works the hours your shares cannot — an agent holding a tokenized-stock perpetual on Bitget, paying its own funding, and able to faint.',
 };

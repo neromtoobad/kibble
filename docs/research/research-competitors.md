@@ -6,7 +6,7 @@ Researched 2026-09-30 (UTC). Everything was read-only: public GitHub READMEs and
 
 ## 0. Urgent flags (read first)
 
-1. **Kibble's live URL is down.** At three checks between about 07:30 and 07:50 UTC on 2026-09-30, `https://app-production-98c2.up.railway.app/`, `/api/log` and `/api/metrics` all returned Railway's `404 {"message":"Application not found"}`. At the same time a second Railway-hosted competitor, Diagnos (`diagnos-production-1844.up.railway.app`), returned the same error. The Railway status page said "Operational". So this may be a Railway edge or routing problem rather than something in Kibble, but either way judges cannot open the demo or the paper log right now. Under the handbook, "accessible submission materials" missing = **invalid entry**. Verify the Railway domain or service. A static fallback would help too: a committed snapshot of `/api/log?format=csv` and `/api/metrics` in the repo, or a GitHub Pages mirror.
+1. **Kibble's live URL is down.** At three checks between about 07:30 and 07:50 UTC on 2026-09-30, `https://kibble.up.railway.app/`, `/api/log` and `/api/metrics` all returned Railway's `404 {"message":"Application not found"}`. At the same time a second Railway-hosted competitor, Diagnos (`diagnos-production-1844.up.railway.app`), returned the same error. The Railway status page said "Operational". So this may be a Railway edge or routing problem rather than something in Kibble, but either way judges cannot open the demo or the paper log right now. Under the handbook, "accessible submission materials" missing = **invalid entry**. Verify the Railway domain or service. A static fallback would help too: a committed snapshot of `/api/log?format=csv` and `/api/metrics` in the repo, or a GitHub Pages mirror.
 2. **The deadline is ambiguous.** The handbook still says 9/27 (UTC+8). @Bitget_AI posted "submission extend to Sep 27th" on about Sep 22, and later: *"Good news for builders still shipping — Hackathon S2 submission deadline is now Oct 8."* That post is dated about Sep 24 on the nitter mirror (https://nitter.jaydenha.uk/Bitget_AI). The user's information says Oct 6. The safe plan is still to submit by Oct 5 16:00 UTC. Judging window in the handbook: 9/22–10/7. Results: 10/8.
 3. **Public voting has not been published yet.** The handbook still shows "[TBD: Public voting post]". Voting works by commenting the project ID under Bitget's official voting post. Project IDs are released only after the deadline, so the voting window will probably move with the extension.
 
@@ -399,4 +399,4 @@ Kibble already has 1, most of 3 (the diary), 4 (three pets), 5 and 6, plus stron
 
 **Kibble**
 - https://github.com/neromtoobad/kibble
-- https://app-production-98c2.up.railway.app (404 at check time)
+- https://kibble.up.railway.app (404 at check time)

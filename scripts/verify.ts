@@ -12,7 +12,7 @@ import { genesis, link, type ChainRow } from '../src/lib/chain';
 type Pet = { petId: string; name: string; length: number; head: string | null; orphans: number; rows: Array<Omit<ChainRow, 'petId'> & { hash: string; prev: string }> };
 
 async function main() {
-  const base = (process.argv[2] ?? 'https://app-production-98c2.up.railway.app').replace(/\/$/, '');
+  const base = (process.argv[2] ?? 'https://kibble.up.railway.app').replace(/\/$/, '');
   const res = await fetch(`${base}/api/chain`);
   if (!res.ok) { console.error(`${base}/api/chain → HTTP ${res.status}`); process.exit(1); }
   const { pets } = (await res.json()) as { pets: Pet[] };

@@ -4,7 +4,7 @@
 
 A Stockling is a collectible creature *and* an autonomous agent. You pick a stock — any of the **95 Bitget stock perpetuals** that trade enough to paper-trade honestly — and the animal of its sector hatches: AMD a robot cat, Coinbase a hamster, SPY a mosaic tortoise. You name it and choose its personality, which is also its **risk mandate**. Then you feed it. Feeding posts margin on that stock's **rToken perpetual on Bitget**. From then on it reads the news and the filings itself, a model decides what to do about them, the mandate decides what it is *allowed* to do about them, and it writes a diary explaining both.
 
-It pays its own funding every eight hours, and it can be liquidated. Every buy it makes is a **pinky promise** — a thesis, a target, a stop and a deadline — and every promise is graded. Every claim it makes is checkable on one page: **[/proof](https://app-production-98c2.up.railway.app/proof)**.
+It pays its own funding every eight hours, and it can be liquidated. Every buy it makes is a **pinky promise** — a thesis, a target, a stop and a deadline — and every promise is graded. Every claim it makes is checkable on one page: **[/proof](https://kibble.up.railway.app/proof)**.
 
 Built for the **Bitget AI Base Camp Hackathon S2 · Track 2 · Agentic Trading**.
 
@@ -16,12 +16,12 @@ Built for the **Bitget AI Base Camp Hackathon S2 · Track 2 · Agentic Trading**
 
 ## Review it in 90 seconds
 
-1. **[Meet an agent](https://app-production-98c2.up.railway.app/p/fe7c9717-86ee-4675-ae01-4472e57bd77c)** — Nova, a robot cat on NVDA: its return, its open promise, its diary.
-2. **[Check its promises](https://app-production-98c2.up.railway.app/proof#promises)** — every buy was a thesis with a target, a stop and a deadline; here is how each one ended.
-3. **[Price the risk layer](https://app-production-98c2.up.railway.app/proof#guardian)** — what every veto and cut saved or cost, 24 hours later, including when it cost.
-4. **[The model against its twin](https://app-production-98c2.up.railway.app/proof#twin)** — each pet against its own fixed rules on the same tape.
-5. **[Verify the diary](https://app-production-98c2.up.railway.app/proof#chain)** — your browser recomputes every hash; `npm run verify` does it from a terminal.
-6. **[Read the raw log](https://app-production-98c2.up.railway.app/api/log?full=1)** — every row, with Bitget demo order ids where they exist ([CSV](https://app-production-98c2.up.railway.app/api/log?format=csv)).
+1. **[Meet an agent](https://kibble.up.railway.app/p/fe7c9717-86ee-4675-ae01-4472e57bd77c)** — Nova, a robot cat on NVDA: its return, its open promise, its diary.
+2. **[Check its promises](https://kibble.up.railway.app/proof#promises)** — every buy was a thesis with a target, a stop and a deadline; here is how each one ended.
+3. **[Price the risk layer](https://kibble.up.railway.app/proof#guardian)** — what every veto and cut saved or cost, 24 hours later, including when it cost.
+4. **[The model against its twin](https://kibble.up.railway.app/proof#twin)** — each pet against its own fixed rules on the same tape.
+5. **[Verify the diary](https://kibble.up.railway.app/proof#chain)** — your browser recomputes every hash; `npm run verify` does it from a terminal.
+6. **[Read the raw log](https://kibble.up.railway.app/api/log?full=1)** — every row, with Bitget demo order ids where they exist ([CSV](https://kibble.up.railway.app/api/log?format=csv)).
 
 ---
 
@@ -138,7 +138,7 @@ Diamond Hands never sells on price, so its promises are graded but not enforced 
 
 ## Proof
 
-**[/proof](https://app-production-98c2.up.railway.app/proof)** puts every claim above where it can be checked in a couple of minutes. Every number is computed from the agents' own diary and the real Bitget tape by a public route; nothing is typed in.
+**[/proof](https://kibble.up.railway.app/proof)** puts every claim above where it can be checked in a couple of minutes. Every number is computed from the agents' own diary and the real Bitget tape by a public route; nothing is typed in.
 
 - **The score** — return, Sharpe, max drawdown and win rate per agent, from the engine's hourly equity marks ([metrics.ts](src/lib/metrics.ts)).
 - **What the risk layer was worth** — every time a layer cut a position or refused or shrank a buy, the trade that didn't happen is marked to market 24 hours later, funding included ([proof.ts](src/lib/proof.ts)). It is allowed to come out negative, and early on it did. As of 2 Oct, over 31 settled interventions, the trades the layers stopped would have lost **$7.90** net — 10 helped and 21 hurt: wrong more often than right, but the saves were bigger than the misses.
@@ -190,10 +190,10 @@ Sub-theme: **Event-Driven Agent** — *"How do news / announcements / macro even
 |---|---|
 | Runnable demo | the app |
 | event → decision → execution flow | `sensed` → `decided` → `vetoed` → `open` in the diary; `npm run gatetest` proves the ordering |
-| **Paper trading log**, run during the competition | [`/api/log`](https://app-production-98c2.up.railway.app/api/log) (`?format=csv`, `?full=1` for the reasoning rows), written every 15 minutes since 2026-09-20. Since 2026-09-30, the agents whose contract Bitget's demo exchange lists execute there, and their rows carry the order id and fill |
-| Sharpe, max drawdown, win rate | [`/api/metrics`](https://app-production-98c2.up.railway.app/api/metrics), computed live by `metrics.ts` from each agent's hourly equity marks |
-| Explainability | the diary, [pinky promises](#pinky-promises), and [/proof](https://app-production-98c2.up.railway.app/proof)'s decision inspector |
-| Risk-control effectiveness | [/proof](https://app-production-98c2.up.railway.app/proof#guardian): what every intervention saved or cost, 24 hours later |
+| **Paper trading log**, run during the competition | [`/api/log`](https://kibble.up.railway.app/api/log) (`?format=csv`, `?full=1` for the reasoning rows), written every 15 minutes since 2026-09-20. Since 2026-09-30, the agents whose contract Bitget's demo exchange lists execute there, and their rows carry the order id and fill |
+| Sharpe, max drawdown, win rate | [`/api/metrics`](https://kibble.up.railway.app/api/metrics), computed live by `metrics.ts` from each agent's hourly equity marks |
+| Explainability | the diary, [pinky promises](#pinky-promises), and [/proof](https://kibble.up.railway.app/proof)'s decision inspector |
+| Risk-control effectiveness | [/proof](https://kibble.up.railway.app/proof#guardian): what every intervention saved or cost, 24 hours later |
 | Compliant X post | *(yours to post)* |
 
 Judging is 50% quantitative — paper Sharpe, max drawdown, win rate — plus decision explainability, agent architecture, and **risk-control effectiveness**. [metrics.ts](src/lib/metrics.ts) computes the first three from the engine's own hourly equity marks rather than asserting them. Explainability is the diary: every line names what was read and why. The risk-control layer is `gate()`, and it is the one part of this that is allowed to tell the model no.
