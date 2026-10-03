@@ -25,7 +25,7 @@ export const viewport: Viewport = { themeColor: '#C8FF3D', viewportFit: 'cover' 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const session = isNight(nyseSession()) ? 'night' : 'day';
   return (
-    <html lang="en" data-session={session} className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    <html lang="en" data-session={session} data-theme="light" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="min-h-dvh antialiased"><SessionTheme /><Shell>{children}</Shell></body>
     </html>
   );

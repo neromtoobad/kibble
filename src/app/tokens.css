@@ -1,4 +1,4 @@
-/* Tamastonk design tokens — source of truth is DESIGN.md. Session-driven: <html data-session="day|night">. */
+/* Tamastonk design tokens — source of truth is DESIGN.md. Light by default; <html data-theme="dark"> (?night=1) is the night look. */
 :root {
   --canvas: #F6F5EE;
   --surface: #FFFFFF;
@@ -11,13 +11,16 @@
   --down: #D6403F;
   --glow: none;
   --grid: none;
+  /* What the night session is drawn in: ink on the light page, the accent on the dark one. */
+  --signal: var(--ink);
+  --halo: var(--line);
   --radius-card: 28px;
   --radius-pill: 999px;
   --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
-:root[data-session="night"] {
+:root[data-theme="dark"] {
   --canvas: #0B0F14;
   --surface: #131A22;
   --ink: #F2F4F1;
@@ -27,6 +30,8 @@
   --down: #FF7B7A;
   --glow: 0 0 28px #C8FF3D66;
   --grid: radial-gradient(#1A2230 1px, transparent 1px);
+  --signal: var(--accent);
+  --halo: var(--accent);
 }
 body {
   background: var(--canvas);

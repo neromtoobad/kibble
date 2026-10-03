@@ -8,7 +8,7 @@ export function Pet({ id, mood, night, size = 300 }: { id: Species['id']; mood: 
   return (
     <div className="relative grid place-items-center" style={{ width: size, height: size }}>
       <div className="absolute bottom-3 h-6 rounded-full" style={{
-        width: size * 0.7, background: night ? 'var(--accent)' : 'var(--line)',
+        width: size * 0.7, background: night ? 'var(--halo)' : 'var(--line)',
         filter: night ? 'blur(18px)' : 'blur(8px)', opacity: night ? 0.55 : 0.8,
       }} aria-hidden />
       <AnimatePresence mode="popLayout">

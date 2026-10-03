@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Theme is driven by the NYSE session via <html data-session>, see tokens.css — not by prefers-color-scheme. */
+/* Light by default; <html data-theme="dark"> switches to the night look, see tokens.css. Not prefers-color-scheme. */
 @theme inline {
   --font-sans: var(--font-body);
   --font-mono: var(--font-mono);
