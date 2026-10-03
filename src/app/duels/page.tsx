@@ -68,12 +68,12 @@ export default function Board() {
       {pulse && pulse.actions > 0 && (
         <p className="mt-2 text-center text-[12px] num" style={{ color: 'var(--muted)' }}>
           {pulse.actions} moves in the last 24h
-          {pulse.afterHours > 0 && <> · <span style={{ color: 'var(--accent)' }}>{pulse.afterHours} while the NYSE was shut</span></>}
+          {pulse.afterHours > 0 && <> · <span className="font-semibold" style={{ color: 'var(--signal)' }}>{pulse.afterHours} while the NYSE was shut</span></>}
         </p>
       )}
 
       {note && (
-        <p className="mt-3 text-center text-[13px]" style={{ color: 'var(--accent)' }} onClick={() => setNote(null)}>{note}</p>
+        <p className="mt-3 text-center text-[13px] font-semibold" style={{ color: 'var(--signal)' }} onClick={() => setNote(null)}>{note}</p>
       )}
 
       {open.length > 0 && (
@@ -105,7 +105,7 @@ export default function Board() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>
                   {/* Every agent's public page: its promise, its diary, its card. */}
-                  <Link href={`/p/${r.id}`} className="underline-offset-2 hover:underline">{r.name}</Link>{isMine && <span className="ml-1 text-[11px]" style={{ color: 'var(--accent)' }}>you</span>}
+                  <Link href={`/p/${r.id}`} className="underline-offset-2 hover:underline">{r.name}</Link>{isMine && <span className="ml-1 text-[11px] font-semibold" style={{ color: 'var(--signal)' }}>you</span>}
                 </p>
                 <p className="text-[11.5px] num" style={{ color: 'var(--muted)' }}>
                   {PERSONALITIES[r.personality]?.icon} {r.ticker} · day {r.streak}

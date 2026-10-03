@@ -34,7 +34,7 @@ export default function Diary() {
               </p>
               {e.sig && (
                 <a href={`https://solscan.io/tx/${e.sig}`} target="_blank" rel="noreferrer"
-                  className="mt-1 inline-block text-[11.5px] num" style={{ color: 'var(--accent)' }}>View on Solscan ↗</a>
+                  className="mt-1 inline-block text-[11.5px] num underline underline-offset-2" style={{ color: 'var(--signal)' }}>View on Solscan ↗</a>
               )}
             </div>
           </li>
