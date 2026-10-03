@@ -6,3 +6,7 @@
   --font-mono: var(--font-mono);
 }
 img { -webkit-user-drag: none; }
+/* A mouse should see what it can press; Tailwind v4 leaves buttons on the default cursor. */
+button:not(:disabled), [role="button"], summary, label:has(input[type="checkbox"]) { cursor: pointer; }
+/* And a keyboard should see where it is. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

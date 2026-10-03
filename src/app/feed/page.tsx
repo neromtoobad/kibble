@@ -50,7 +50,7 @@ export default function FeedPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-10 pt-[max(12px,env(safe-area-inset-top))]">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] md:max-w-[600px] lg:max-w-none lg:pt-6 flex-col px-4 pb-10 pt-[max(12px,env(safe-area-inset-top))]">
       <div className="grid grid-cols-[40px_1fr_40px] items-center">
         <button onClick={() => router.back()} aria-label="Back" className="text-[22px]">‹</button>
         <span className="justify-self-center rounded-full border px-3 py-1.5 text-[12px] num" style={{ borderColor: 'var(--ink)' }}>Feed {pet.name}</span>

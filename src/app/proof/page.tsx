@@ -119,7 +119,7 @@ export default function ProofPage() {
   const g = proof?.totals;
 
   return (
-    <main className="mx-auto min-h-dvh max-w-[980px] px-4 pb-28 pt-[max(16px,env(safe-area-inset-top))]">
+    <main className="mx-auto min-h-dvh max-w-[980px] px-4 pb-28 pt-[max(16px,env(safe-area-inset-top))] lg:px-6 lg:pb-16 lg:pt-8 xl:max-w-[1108px]">
       <h1 className="text-[30px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Proof</h1>
       <p className="max-w-[720px] text-[14px]" style={{ color: 'var(--muted)' }}>
         Everything Kibble claims, checkable in a couple of minutes. Every number is computed from the agents&apos; own diary and the real

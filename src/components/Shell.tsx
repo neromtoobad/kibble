@@ -4,10 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SPECIES_LIST, petImage } from '@/lib/pets';
 
-// The app is a phone app. On a wide screen it stays one — the column a pet lives in — and the rest
-// of the screen becomes the desk: navigation, a review path for anyone judging the claims, the
-// board, and the newest things the agents decided, all live. Pages that are already wide (Proof)
-// get the whole width instead.
+// One app for a phone and a desk. On a phone it is a single column with a tab bar at the bottom. On a
+// tablet the column widens. On a wide screen a top bar takes over navigation, the pet's column widens,
+// and the rest of the screen becomes the desk: a review path for anyone judging the claims, the board,
+// and the newest things the agents decided, all live. Pages that are already wide (Proof) get the
+// whole width under the top bar instead.
+//
+// Widths add up so nothing overflows: lg is 560 + 32 + 360 (+48 padding) = 1000 <= 1024, and xl is
+// 640 + 40 + 380 (+48) = 1108 <= 1280.
 
 const WIDE = ['/proof'];
 export const isWide = (path: string) => WIDE.some((w) => path.startsWith(w));
@@ -24,12 +28,44 @@ export const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  if (isWide(path)) return <>{children}</>;
   return (
-    <div className="lg:flex lg:items-start lg:justify-center lg:gap-10 lg:px-6">
-      <div className="min-w-0 lg:w-[430px] lg:shrink-0">{children}</div>
-      <Desk path={path} />
-    </div>
+    <>
+      <TopBar path={path} />
+      {isWide(path) ? children : (
+        <div className="lg:flex lg:items-start lg:justify-center lg:gap-8 lg:px-6 xl:gap-10">
+          <div className="min-w-0 lg:w-[560px] lg:shrink-0 xl:w-[640px]">{children}</div>
+          <Desk />
+        </div>
+      )}
+    </>
+  );
+}
+
+const active = (path: string, href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+
+/** The wide screen's navigation: the phone's tab bar steps aside for it. */
+function TopBar({ path }: { path: string }) {
+  return (
+    <header className="sticky top-0 z-20 hidden border-b backdrop-blur lg:block" style={{ background: 'color-mix(in srgb, var(--canvas) 88%, transparent)', borderColor: 'var(--line)' }}>
+      <div className="mx-auto flex h-16 items-center gap-6 px-6 lg:max-w-[1000px] xl:max-w-[1108px]">
+        <Link href="/" className="text-[24px] font-bold leading-none" style={{ fontFamily: 'var(--font-display)' }}>Kibble</Link>
+        <nav className="flex items-center gap-1" aria-label="Sections">
+          {TABS.map((t) => {
+            const on = active(path, t.href);
+            return (
+              <Link key={t.href} href={t.href} aria-current={on ? 'page' : undefined}
+                className="rounded-full px-3.5 py-2 text-[14px] font-semibold transition-colors hover:bg-[var(--surface)]"
+                style={on ? { background: 'var(--ink)', color: 'var(--canvas)' } : { color: 'var(--muted)' }}>
+                <span aria-hidden className="mr-1.5">{t.icon}</span>{t.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <span className="ml-auto hidden whitespace-nowrap text-[12px] num xl:inline" style={{ color: 'var(--muted)' }}>paper trading on Bitget · since 20 Sep</span>
+        <Link href="/adopt" className="ml-auto shrink-0 whitespace-nowrap rounded-full xl:ml-0 px-4 py-2 text-[14px] font-semibold transition-transform hover:scale-[1.03] active:scale-[0.98]"
+          style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'var(--font-display)' }}>Adopt a pet</Link>
+      </div>
+    </header>
   );
 }
 
@@ -54,7 +90,7 @@ const OUTCOME: Record<string, { label: string; color?: string }> = {
 const ago = (ms: number) => (ms < 60e3 ? 'just now' : ms < 3600e3 ? `${Math.round(ms / 60e3)}m ago` : ms < 86400e3 ? `${Math.round(ms / 3600e3)}h ago` : `${Math.round(ms / 86400e3)}d ago`);
 const get = <T,>(url: string): Promise<T | null> => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
-function Desk({ path }: { path: string }) {
+function Desk() {
   const [board, setBoard] = useState<Board[] | null>(null);
   const [feed, setFeed] = useState<Feed[] | null>(null);
   const [now, setNow] = useState(0);
@@ -76,24 +112,8 @@ function Desk({ path }: { path: string }) {
   }, []);
 
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[380px] shrink-0 overflow-y-auto py-6 lg:block" aria-label="Desk">
-      <div className="flex items-baseline justify-between">
-        <p className="text-[26px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Kibble</p>
-        <p className="text-[12px] num" style={{ color: 'var(--muted)' }}>{board ? `${board.length} agents live` : 'live'} · paper since 20 Sep</p>
-      </div>
-      <nav className="mt-3 flex flex-wrap gap-1.5" aria-label="Sections">
-        {TABS.map((t) => {
-          const on = t.href === '/' ? path === '/' : path.startsWith(t.href);
-          return (
-            <Link key={t.href} href={t.href} className="rounded-full border px-3 py-1.5 text-[13px] font-semibold"
-              style={on ? { background: 'var(--ink)', color: 'var(--canvas)', borderColor: 'var(--ink)' } : { background: 'var(--surface)', borderColor: 'var(--line)' }}>
-              <span aria-hidden className="mr-1">{t.icon}</span>{t.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <section className="card mt-5 px-4 py-4">
+    <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[360px] shrink-0 overflow-y-auto py-6 lg:block xl:w-[380px]" aria-label="Desk">
+      <section className="card px-4 py-4">
         <h2 className="text-[16px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Kibble in 90 seconds</h2>
         <ol className="mt-2 grid gap-2">
           {PATH.map((p, i) => (
@@ -112,8 +132,8 @@ function Desk({ path }: { path: string }) {
 
       <section className="card mt-3 px-4 py-4">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-[16px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Board</h2>
-          <Link href="/duels" className="text-[12px] font-semibold" style={{ color: 'var(--muted)' }}>all →</Link>
+          <h2 className="text-[16px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Board{board ? <span className="ml-1.5 text-[12px] font-medium num" style={{ color: 'var(--muted)' }}>{board.length} live</span> : null}</h2>
+          <Link href="/duels" className="text-[12px] font-semibold hover:underline" style={{ color: 'var(--muted)' }}>all →</Link>
         </div>
         <ul className="mt-2 grid gap-1.5">
           {(board ?? []).map((r) => (

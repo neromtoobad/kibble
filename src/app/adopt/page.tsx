@@ -35,7 +35,7 @@ export default function Adopt() {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-10 pt-[max(12px,env(safe-area-inset-top))]">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] md:max-w-[600px] lg:max-w-none lg:pt-6 flex-col px-4 pb-10 pt-[max(12px,env(safe-area-inset-top))]">
       <div className="flex items-center justify-center">
         <span className="rounded-full border px-3 py-1.5 text-[12px] num" style={{ borderColor: 'var(--ink)' }}>
           {step === 'egg' ? 'Adopt' : step === 'hatch' ? 'Hatching' : 'Name & personality'}

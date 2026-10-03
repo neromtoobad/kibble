@@ -1,14 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TABS, isWide } from './Shell';
+import { TABS } from './Shell';
 
-// The phone's tab bar. On a wide screen the desk beside the pet carries the same tabs, so the bar
-// steps aside there — except on pages wide enough to have no desk.
+// The phone's tab bar, and the tablet's. On a wide screen the top bar carries the same tabs, so this
+// one steps aside there.
 export function Nav() {
   const path = usePathname();
   return (
-    <nav className={`fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-[430px] justify-around border-t px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 text-[12px] font-semibold ${isWide(path) ? '' : 'lg:hidden'}`}
+    <nav className={`fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-[430px] justify-around md:max-w-[600px] border-t px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 text-[12px] font-semibold lg:hidden`}
       style={{ background: 'var(--canvas)', borderColor: 'var(--line)', color: 'var(--muted)' }}>
       {TABS.map((t) => {
         const active = t.href === '/' ? path === '/' : path.startsWith(t.href);

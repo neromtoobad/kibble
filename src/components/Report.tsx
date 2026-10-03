@@ -25,9 +25,9 @@ export function Report({ pet, fresh, awayMs, price, onClose }: {
   const fainted = fresh.some((f) => f.kind === 'liquidated');
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center" style={{ background: 'rgba(0,0,0,.45)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-30 flex items-end justify-center md:items-center md:p-6" style={{ background: 'rgba(0,0,0,.45)' }} onClick={onClose}>
       <motion.div onClick={(e) => e.stopPropagation()} initial={{ y: '100%' }} animate={{ y: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-        className="w-full max-w-[430px] rounded-t-[28px] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4"
+        className="w-full max-w-[430px] rounded-t-[28px] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4 md:max-w-[480px] md:rounded-[28px] md:pb-6"
         style={{ background: 'var(--surface)', maxHeight: '86dvh', overflowY: 'auto' }}>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full" style={{ background: 'var(--line)' }} />
         <div className="flex items-center gap-3">

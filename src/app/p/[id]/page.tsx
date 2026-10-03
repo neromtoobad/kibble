@@ -42,7 +42,7 @@ export default async function PetPage({ params }: Props) {
   const when = (t: number) => `${date(t)}, ${new Date(t).toISOString().slice(11, 16)}`;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))]">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] md:max-w-[600px] lg:max-w-none lg:pt-6 flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))] lg:pb-12">
       <p className="text-center text-[12px] num" style={{ color: 'var(--muted)' }}>
         {c.execution === 'demo' ? 'trades on Bitget’s demo exchange' : 'paper-traded at the bar close'}
       </p>

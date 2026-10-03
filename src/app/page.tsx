@@ -129,7 +129,7 @@ export default function Home() {
   if (!hasStore && !pet) return <main className="min-h-dvh" />;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))]">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] md:max-w-[600px] lg:max-w-none lg:pt-6 flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))] lg:pb-12">
       <div className="flex items-center justify-between">
         <span className="rounded-full border px-3 py-1.5 text-[12px] num" style={{ borderColor: night ? 'var(--accent)' : 'var(--ink)', color: night ? 'var(--accent)' : 'var(--ink)', boxShadow: night ? 'var(--glow)' : 'none' }}>
           {night ? '☾' : '☀'} {sessionLabel[session]}

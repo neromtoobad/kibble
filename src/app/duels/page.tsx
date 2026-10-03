@@ -59,7 +59,7 @@ export default function Board() {
   const medal = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))]">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] md:max-w-[600px] lg:max-w-none lg:pt-6 flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))] lg:pb-12">
       <h1 className="text-center text-[28px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Board</h1>
       <p className="text-center text-[13px]" style={{ color: 'var(--muted)' }}>
         Ranked by return since each pet’s first hourly mark, at the live price. Nobody reports their own score.

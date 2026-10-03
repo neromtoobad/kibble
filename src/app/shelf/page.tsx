@@ -13,7 +13,7 @@ export default function Shelf() {
   const members = SPECIES_LIST.filter((s) => s.family === open)
     .sort((a, b) => Number(b.founder) - Number(a.founder) || (b.volume24h ?? 0) - (a.volume24h ?? 0));
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))]">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] md:max-w-[600px] lg:max-w-none lg:pt-6 flex-col px-4 pb-24 pt-[max(12px,env(safe-area-inset-top))] lg:pb-12">
       <h1 className="text-center text-[28px] font-bold" style={{ fontFamily: 'var(--font-display)' }}>Shelf</h1>
       <p className="text-center text-[13px]" style={{ color: 'var(--muted)' }}>
         {FAMILY_LIST.length} Stocklings, {SPECIES_LIST.length} Bitget perpetuals. One wrong detail each.
@@ -39,7 +39,7 @@ export default function Shelf() {
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-4">
         {FAMILY_LIST.map((x) => (
           <button key={x.id} onClick={() => { setOpen(x.id); setMood('chill'); }} className="card flex flex-col items-center gap-1 px-2 pb-2 pt-3"
             style={{ outline: open === x.id ? '3px solid var(--accent)' : '3px solid transparent' }}>

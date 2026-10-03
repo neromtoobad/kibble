@@ -33,7 +33,7 @@ export function StockPicker({ pick, onPick }: { pick: string | null; onPick: (id
         {query && <button onClick={() => setQuery('')} className="text-[13px] font-semibold" style={{ color: 'var(--muted)' }} aria-label="Clear search">✕</button>}
       </label>
 
-      <div className="-mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
+      <div className="-mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0" style={{ scrollbarWidth: 'none' }}>
         <Chip on={family === 'all'} onClick={() => setFamily('all')}>All</Chip>
         {FAMILY_LIST.map((f) => (
           <Chip key={f.id} on={family === f.id} onClick={() => setFamily(family === f.id ? 'all' : f.id)}>
@@ -51,7 +51,7 @@ export function StockPicker({ pick, onPick }: { pick: string | null; onPick: (id
 
       {/* A flex column, not a grid: a grid track grows to the widest row's min-content, and a
           nowrap company name would widen every row past the screen instead of truncating. */}
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
         {list.map((s) => {
           const on = pick === s.id, tag = TAG[s.kind];
           return (
@@ -96,5 +96,5 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide" style={{ background: 'var(--canvas)', color: 'var(--muted)' }}>{children}</span>;
+  return <span className="whitespace-nowrap rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide" style={{ background: 'var(--canvas)', color: 'var(--muted)' }}>{children}</span>;
 }
