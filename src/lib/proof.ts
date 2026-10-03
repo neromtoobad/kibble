@@ -14,9 +14,17 @@ import type { Species } from './pets';
 // a trade that did not happen. Mark it to market 24 hours later, including the funding that position
 // would have paid at each settlement in between: if holding would have lost money, the intervention
 // saved it; if it would have made money, it cost that. Summed, that is what the risk layer was worth.
+//
+// A refused buy is one missed trade, however often it is refused. A pet that keeps asking to add while
+// a layer keeps saying no is asking for the same trade every hour; pricing each refusal as a trade of
+// its own books exposure the pet could never have held (Stack on 3 Oct: one add, refused 29 times,
+// booked as 29 adds at 8x). So a refusal opens an episode, priced from that first refusal, and later
+// refusals belong to it until the pet's position changes or the episode's 24 hours are up.
 
 export const HORIZON_H = 24;
 const RISK = new Set(['mandate', 'storm', 'weekend', 'kennel', 'kill']);
+/** Diary kinds that change the position, and so end a run of refusals. */
+const MOVES = new Set(['open', 'add', 'trim', 'flatten', 'liquidated']);
 
 /** Funding a long of `notional` would have paid between t and t + HORIZON_H, from settled rates. */
 function fundingOver(funding: Array<{ t: number; rate: number }>, t: number, notional: number): number {
@@ -56,7 +64,10 @@ export type LedgerRow = { ts: number; kind: string; text: string; qty?: number; 
 
 export function guardianLedger(rows: LedgerRow[], bars: Bar[], funding: Array<{ t: number; rate: number }> = []) {
   const out: Intervention[] = [];
+  let episode = -Infinity, repeats = 0; // when the current run of refusals began
   for (const e of rows) {
+    const refusal = e.kind === 'vetoed';
+    if (MOVES.has(e.kind)) episode = -Infinity;
     const by = actorOf(e);
     if (!by || !RISK.has(by)) {
       // A trade the pet made that a risk layer shrank still carries the shadow of the part it cut.
@@ -70,6 +81,7 @@ export function guardianLedger(rows: LedgerRow[], bars: Bar[], funding: Array<{ 
     // cannot tell a risk rule apart from the pet simply not having X. Those are left out rather than
     // scored: only the cuts, whose size is on the row, count from that period.
     else continue;
+    if (refusal && e.ts - episode < HORIZON_H * 3600e3) { repeats++; continue; }
     const price = e.price ?? shadow?.price ?? bars.find((b) => b.t >= e.ts)?.close;
     const later = priceAt(bars, e.ts);
     if (!price || !later || qty <= 0) continue;
@@ -77,11 +89,14 @@ export function guardianLedger(rows: LedgerRow[], bars: Bar[], funding: Array<{ 
     const paid = fundingOver(funding, e.ts, qty * price);
     const pnl = qty * (later.price - price) - paid - (side === 'kept-out' ? 2 * qty * price * TAKER_FEE : 0);
     out.push({ ts: e.ts, by: by ?? 'mandate', kind: e.kind, text: e.text, qty, price, later: later.price, pending: later.pending, pnlIfIgnored: pnl, saved: -pnl, funding: paid });
+    if (refusal) episode = e.ts;
   }
   const settled = out.filter((x) => !x.pending);
   return {
     interventions: out,
     count: out.length,
+    /** Refusals folded into an earlier one: the same missed trade, asked for again. */
+    repeats,
     settled: settled.length,
     saved: settled.reduce((s, x) => s + x.saved, 0),
     helped: settled.filter((x) => x.saved > 0).length,

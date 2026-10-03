@@ -33,7 +33,7 @@ export async function GET() {
     const entries = await pool().query<EntryRow>(
       `select pet_id, ts, kind, body, qty, price, by_actor, meta
          from pet_entries where kind = any($1) order by ts asc`,
-      [['trim', 'flatten', 'vetoed', 'open', 'add', 'promise']],
+      [['trim', 'flatten', 'vetoed', 'open', 'add', 'liquidated', 'promise']],
     );
     const tapes = new Map<string, Awaited<ReturnType<typeof fetchBars>>>();
     for (const sp of new Set(pets.rows.map((p) => p.species))) {
@@ -52,7 +52,7 @@ export async function GET() {
       return {
         agent: p.name, instrument: SPECIES[p.species as Species['id']]?.symbol ?? p.species, personality: p.personality,
         guardian: g && {
-          interventions: g.count, settled: g.settled, saved: g.saved, helped: g.helped, hurt: g.hurt, byLayer: g.byLayer,
+          interventions: g.count, repeats: g.repeats, settled: g.settled, saved: g.saved, helped: g.helped, hurt: g.hurt, byLayer: g.byLayer,
           recent: g.interventions.slice(-8).reverse(),
         },
         twin: t,
@@ -63,10 +63,11 @@ export async function GET() {
     const settled = agents.flatMap((a) => (a.guardian ? [a.guardian] : []));
     const twins = agents.flatMap((a) => (a.twin ? [a.twin] : []));
     const body = {
-      note: `Guardian: each risk-layer intervention marked to market ${HORIZON_H}h later, funding included; saved = what ignoring it would have lost. Refusals from before shadow trades were recorded (30 Sep) are not scored, only cuts. Twin: the same pet on its fixed rules alone, replayed on the same bars from its first hourly mark; the live pet ran older code early on, so "added" is the model plus those changes, against today's rules. Promises: every model buy states a thesis, a target, a stop and a deadline, and is graded by whichever comes first; closed-early promises are counted but not scored.`,
+      note: `Guardian: each risk-layer intervention marked to market ${HORIZON_H}h later, funding included; saved = what ignoring it would have lost. A buy refused again before the position changes is the same missed trade, so it counts once, priced from the first refusal, for up to ${HORIZON_H}h (repeats = refusals folded in this way). Refusals from before shadow trades were recorded (30 Sep) are not scored, only cuts. Twin: the same pet on its fixed rules alone, replayed on the same bars from its first hourly mark; the live pet ran older code early on, so "added" is the model plus those changes, against today's rules. Promises: every model buy states a thesis, a target, a stop and a deadline, and is graded by whichever comes first; closed-early promises are counted but not scored.`,
       as_of: new Date().toISOString(),
       totals: {
         interventions: settled.reduce((s, g) => s + g.interventions, 0),
+        repeats: settled.reduce((s, g) => s + g.repeats, 0),
         settled: settled.reduce((s, g) => s + g.settled, 0),
         saved: settled.reduce((s, g) => s + g.saved, 0),
         helped: settled.reduce((s, g) => s + g.helped, 0),

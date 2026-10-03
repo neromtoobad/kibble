@@ -143,7 +143,7 @@ export default function ProofPage() {
       </Section>
 
       <Section id="guardian" title="What the risk layer was worth"
-        sub="Every time a risk layer overruled a pet — cut a position, or refused or shrank a buy — the trade that did not happen is marked to market 24 hours later, funding included. Saved is what ignoring it would have lost. It is allowed to come out negative, and sometimes does.">
+        sub="Every time a risk layer overruled a pet — cut a position, or refused or shrank a buy — the trade that did not happen is marked to market 24 hours later, funding included. A buy refused again before anything changes is the same missed trade, so it counts once. Saved is what ignoring it would have lost. It is allowed to come out negative, and sometimes does.">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat v={g ? money(g.saved) : '—'} k="saved, settled interventions" color={tone(g?.saved)} />
           <Stat v={g ? `${g.helped} / ${g.hurt}` : '—'} k="helped / hurt" />
